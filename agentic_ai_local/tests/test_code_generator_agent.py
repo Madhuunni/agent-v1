@@ -3,7 +3,7 @@ from pathlib import Path
 from app.agents import code_generator_agent
 
 
-def test_generated_selenium_script_uses_stable_chrome_options(monkeypatch, tmp_path):
+def test_generated_selenium_script_uses_resilient_chrome_options(monkeypatch, tmp_path):
     generated_dir = tmp_path / "generated_tests"
     generated_dir.mkdir()
     monkeypatch.setattr(code_generator_agent, "GENERATED_TESTS_DIR", generated_dir)
@@ -32,11 +32,15 @@ def test_generated_selenium_script_uses_stable_chrome_options(monkeypatch, tmp_p
     source = generated_path.read_text()
 
     assert "import tempfile" in source
-    assert "def build_chrome_options(profile_dir: str) -> Options:" in source
+    assert "def build_chrome_options(profile_dir: str, *, legacy_headless: bool = False) -> Options:" in source
     assert "--user-data-dir={profile_dir}" in source
     assert "--no-sandbox" in source
     assert "--disable-dev-shm-usage" in source
-    assert "--remote-debugging-port=0" in source
+    assert "--remote-debugging-pipe" in source
+    assert "--disable-software-rasterizer" in source
+    assert "--no-first-run" in source
+    assert "def create_chrome_driver(profile_dir: str) -> webdriver.Chrome:" in source
+    assert "legacy_headless=True" in source
     compile(source, str(generated_path), "exec")
 
 
