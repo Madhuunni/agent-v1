@@ -87,3 +87,29 @@ def test_requirement_agent_invokes_local_llm(monkeypatch):
 
     assert calls
     assert result["agent_outputs"]["requirement_agent_llm_notes"] == "local llm checklist"
+
+
+def test_requirement_agent_continues_when_local_llm_unavailable(monkeypatch):
+    from app.agents import requirement_agent
+    from app.llm.local_llm import OllamaUnavailableError
+
+    def unavailable_model():
+        raise OllamaUnavailableError("ollama is offline")
+
+    monkeypatch.setattr(requirement_agent, "get_chat_model", unavailable_model)
+
+    result = requirement_agent.run(
+        {
+            "user_prompt": "Generate Selenium test plan",
+            "observation": {"detected_url": None},
+            "agent_outputs": {},
+        }
+    )
+
+    assert result["requirement"]["missing_information"] == [
+        "Base URL is required before DOM inspection can run."
+    ]
+    assert (
+        "continuing with deterministic requirements"
+        in result["agent_outputs"]["requirement_agent_llm_notes"]
+    )
