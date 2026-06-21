@@ -79,3 +79,27 @@ def test_generated_selenium_script_adds_base_url_navigation_when_step_missing(mo
     assert "options.page_load_strategy = \"eager\"" in source
     assert "wait.until(lambda d: d.current_url.startswith('http://localhost:4200'))" in source
     compile(source, str(generated_path), "exec")
+
+
+def test_generated_selenium_script_pins_chromedriver_to_detected_browser(monkeypatch, tmp_path):
+    generated_dir = tmp_path / "generated_tests"
+    generated_dir.mkdir()
+    monkeypatch.setattr(code_generator_agent, "GENERATED_TESTS_DIR", generated_dir)
+    monkeypatch.setattr(
+        code_generator_agent,
+        "relative_to_root",
+        lambda path: str(Path(path).relative_to(tmp_path)),
+    )
+
+    result = code_generator_agent.run({"test_plan": {"name": "driver pinning", "steps": []}})
+
+    generated_path = tmp_path / result["generated_code"]["file_path"]
+    source = generated_path.read_text()
+
+    assert "import re" in source
+    assert "import subprocess" in source
+    assert "def chrome_browser_version() -> str | None:" in source
+    assert "google-chrome" in source
+    assert "ChromeDriverManager(driver_version=browser_version).install()" in source
+    assert "service = chromedriver_service()" in source
+    compile(source, str(generated_path), "exec")
