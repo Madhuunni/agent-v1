@@ -43,3 +43,13 @@ def test_run_command_accepts_headless_boolean_value(monkeypatch, tmp_path):
         captured["state"]["user_prompt"]
         == "Generate and run Selenium login test for http://localhost:4200"
     )
+
+
+def test_observer_strips_trailing_prompt_punctuation_from_url():
+    from app.agents import observer_agent
+
+    result = observer_agent.run(
+        {"user_prompt": 'Generate Selenium test for http://localhost:4200).'}
+    )
+
+    assert result["observation"]["detected_url"] == "http://localhost:4200"
