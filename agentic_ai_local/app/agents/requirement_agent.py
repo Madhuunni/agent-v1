@@ -5,14 +5,17 @@ from app.schemas.requirement import Requirement, RequirementStep
 
 
 def _local_llm_notes(prompt: str, url: str | None) -> str:
-    model = get_chat_model()
-    response = model.invoke(
-        "You are a local Selenium requirements analyst. "
-        "Return a concise checklist of requirements and risks for this task. "
-        "Do not recommend cloud services.\n\n"
-        f"Task: {prompt}\nBase URL: {url or 'missing'}"
-    )
-    return str(getattr(response, "content", response)).strip()
+    try:
+        model = get_chat_model()
+        response = model.invoke(
+            "You are a local Selenium requirements analyst. "
+            "Return a concise checklist of requirements and risks for this task. "
+            "Do not recommend cloud services.\n\n"
+            f"Task: {prompt}\nBase URL: {url or 'missing'}"
+        )
+        return str(getattr(response, "content", response)).strip()
+    except Exception as exc:
+        return f"Local LLM unavailable; continuing with deterministic requirements. {exc}"
 
 
 def run(state: dict) -> dict:
