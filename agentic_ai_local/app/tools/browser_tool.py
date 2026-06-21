@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -13,6 +15,25 @@ from webdriver_manager.chrome import ChromeDriverManager
 from app.config import RUN_LOGS_DIR, get_settings
 from app.tools.dom_extractor import summarize_html
 from app.utils.paths import timestamp
+
+
+def _chrome_browser_version() -> str | None:
+    for command in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+        try:
+            output = subprocess.check_output([command, "--version"], text=True, stderr=subprocess.STDOUT).strip()
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            continue
+        match = re.search(r"(\d+(?:\.\d+){0,3})", output)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _chromedriver_service() -> Service:
+    browser_version = _chrome_browser_version()
+    if browser_version:
+        return Service(ChromeDriverManager(driver_version=browser_version).install())
+    return Service(ChromeDriverManager().install())
 
 
 def _chrome_options(profile_dir: str, *, legacy_headless: bool = False) -> Options:
@@ -35,7 +56,7 @@ def _chrome_options(profile_dir: str, *, legacy_headless: bool = False) -> Optio
 
 
 def _create_chrome_driver(profile_dir: str) -> webdriver.Chrome:
-    service = Service(ChromeDriverManager().install())
+    service = _chromedriver_service()
     try:
         return webdriver.Chrome(service=service, options=_chrome_options(profile_dir))
     except (SessionNotCreatedException, WebDriverException) as exc:

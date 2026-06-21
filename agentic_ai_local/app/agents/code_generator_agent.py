@@ -21,6 +21,8 @@ def run(state: dict) -> dict:
     lines = [
         'from __future__ import annotations',
         'import os',
+        'import re',
+        'import subprocess',
         'import tempfile',
         'from pathlib import Path',
         'from selenium import webdriver',
@@ -37,6 +39,23 @@ def run(state: dict) -> dict:
         '    value = os.getenv(name)',
         '    if not value: raise RuntimeError(f"Required environment variable {name} is missing")',
         '    return value',
+        '',
+        'def chrome_browser_version() -> str | None:',
+        '    for command in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):',
+        '        try:',
+        '            output = subprocess.check_output([command, "--version"], text=True, stderr=subprocess.STDOUT).strip()',
+        '        except (FileNotFoundError, subprocess.CalledProcessError):',
+        '            continue',
+        '        match = re.search(r"(\\d+(?:\\.\\d+){0,3})", output)',
+        '        if match:',
+        '            return match.group(1)',
+        '    return None',
+        '',
+        'def chromedriver_service() -> Service:',
+        '    browser_version = chrome_browser_version()',
+        '    if browser_version:',
+        '        return Service(ChromeDriverManager(driver_version=browser_version).install())',
+        '    return Service(ChromeDriverManager().install())',
         '',
         'def build_chrome_options(profile_dir: str, *, legacy_headless: bool = False) -> Options:',
         '    options = Options()',
@@ -56,7 +75,7 @@ def run(state: dict) -> dict:
         '    return options',
         '',
         'def create_chrome_driver(profile_dir: str) -> webdriver.Chrome:',
-        '    service = Service(ChromeDriverManager().install())',
+        '    service = chromedriver_service()',
         '    try:',
         '        return webdriver.Chrome(service=service, options=build_chrome_options(profile_dir))',
         '    except (SessionNotCreatedException, WebDriverException) as exc:',
@@ -72,7 +91,10 @@ def run(state: dict) -> dict:
         '        driver.set_page_load_timeout(30)',
         '        try:',
     ]
-    for step in _steps_with_navigation(plan):
+    steps = _steps_with_navigation(plan)
+    if not steps:
+        lines.append('            pass')
+    for step in steps:
         action=step['action']; target=repr(step['target'])
         lines.append(f"            print({repr(step.get('description','step'))})")
         if action=='navigate':
@@ -83,5 +105,5 @@ def run(state: dict) -> dict:
         elif action=='assert_text': lines.append(f"            wait.until(lambda d: {target} in d.find_element(By.TAG_NAME, 'body').text)")
     lines += ['        except Exception:','            RUN_LOGS.mkdir(exist_ok=True)','            screenshot = RUN_LOGS / "screenshots" / "failure.png"','            screenshot.parent.mkdir(exist_ok=True)','            driver.save_screenshot(str(screenshot))','            raise','        finally:','            driver.quit()','','if __name__ == "__main__":','    main()','']
     path = GENERATED_TESTS_DIR / f"{slugify(plan.get('name','generated_test'))}.py"; path.write_text('\n'.join(lines))
-    req_env = sorted({s.get('value_from_env') for s in _steps_with_navigation(plan) if s.get('value_from_env')})
+    req_env = sorted({s.get('value_from_env') for s in steps if s.get('value_from_env')})
     return {"generated_code": GeneratedCode(file_path=relative_to_root(path), summary='Generated Selenium test', requires_env=req_env).model_dump()}
