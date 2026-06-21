@@ -53,3 +53,37 @@ def test_observer_strips_trailing_prompt_punctuation_from_url():
     )
 
     assert result["observation"]["detected_url"] == "http://localhost:4200"
+
+
+def test_observer_normalizes_single_slash_localhost_url():
+    from app.agents import observer_agent
+
+    result = observer_agent.run(
+        {"user_prompt": "Generate and run Selenium login test for http:/localhost:4200"}
+    )
+
+    assert result["observation"]["detected_url"] == "http://localhost:4200"
+
+
+def test_requirement_agent_invokes_local_llm(monkeypatch):
+    from app.agents import requirement_agent
+
+    calls = []
+
+    class FakeModel:
+        def invoke(self, prompt):
+            calls.append(prompt)
+            return type("Response", (), {"content": "local llm checklist"})()
+
+    monkeypatch.setattr(requirement_agent, "get_chat_model", lambda: FakeModel())
+
+    result = requirement_agent.run(
+        {
+            "user_prompt": "Generate and run Selenium login test for http://localhost:4200",
+            "observation": {"detected_url": "http://localhost:4200"},
+            "agent_outputs": {},
+        }
+    )
+
+    assert calls
+    assert result["agent_outputs"]["requirement_agent_llm_notes"] == "local llm checklist"
