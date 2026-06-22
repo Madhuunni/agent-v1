@@ -4,12 +4,12 @@ from pydantic import BaseModel, Field
 
 class LocatorCandidate(BaseModel):
     by: Literal["css","xpath","id","name"]
-    target: str
+    target: str = Field(min_length=1)
 class LocatorChoice(BaseModel):
     step_number: int
     target_description: str
     selected_by: Literal["css","xpath","id","name"]
-    selected_locator: str
+    selected_locator: str = Field(min_length=1)
     confidence: float = Field(ge=0, le=1)
     reason: str
     fallback_locators: list[LocatorCandidate] = Field(default_factory=list)
