@@ -1,6 +1,7 @@
 from __future__ import annotations
 from app.llm.structured import invoke_json
 from app.llm.local_llm import get_chat_model
+from app.utils.agent_logging import log_llm_request, log_llm_response
 from app.schemas.requirement import Requirement, RequirementStep
 
 def _fallback_requirement(prompt: str, url: str | None) -> Requirement:
@@ -9,14 +10,20 @@ def _fallback_requirement(prompt: str, url: str | None) -> Requirement:
     return Requirement(name="Local Selenium Automation", description=prompt, base_url=url, preconditions=["Ollama and target app are local"] if url else [], steps=steps, success_criteria=["All planned assertions pass"], missing_information=[] if url else ["Base URL is required before DOM inspection can run."])
 
 def _llm_notes(prompt: str, url: str | None) -> str | None:
+    request_json = {"task": prompt, "base_url": url}
+    log_llm_request("requirement_agent.notes", request_json)
     try:
         response = get_chat_model().invoke(
             "Return concise requirements-analysis notes for this local Selenium task. "
             f"Task: {prompt}\nBase URL: {url or 'missing'}"
         )
-        return str(getattr(response, "content", response)).strip()
+        content = str(getattr(response, "content", response)).strip()
+        log_llm_response("requirement_agent.notes", {"raw": content})
+        return content
     except Exception as exc:
-        return f"Local LLM unavailable; continuing with deterministic requirements. {exc}"
+        message = f"Local LLM unavailable; continuing with deterministic requirements. {exc}"
+        log_llm_response("requirement_agent.notes", {"error": str(exc), "fallback": message})
+        return message
 
 def run(state: dict) -> dict:
     obs = state.get("observation") or {}; prompt = state.get("user_prompt", ""); url = obs.get("detected_url")
