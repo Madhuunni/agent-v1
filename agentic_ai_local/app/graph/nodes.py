@@ -52,7 +52,12 @@ def make_agent_node(agent_name: str):
             output = AGENT_RUNNERS[agent_name](state)
             merged = dict(state)
             merged.update(output)
-            after = after_agent(merged, agent_name, output=output)
+            # Store a snapshot of the agent's direct artifact in agent_outputs.
+            # Passing the live ``output`` dict creates a self-reference after
+            # ``output.update(after)`` below because ``after_agent`` records the
+            # same object under ``agent_outputs[agent_name]``. That circular
+            # structure later breaks report JSON serialization.
+            after = after_agent(merged, agent_name, output=dict(output))
             output.update(after)
             log_agent_end(agent_name, output)
             return output
