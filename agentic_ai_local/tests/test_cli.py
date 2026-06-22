@@ -146,3 +146,32 @@ def test_requirement_fallback_uses_email_field_for_login_prompt():
 
     assert requirement.steps[1].target_description == "email field"
     assert requirement.steps[1].value_from_env == "APP_USERNAME"
+
+
+def test_agent_activity_logs_to_separate_timestamped_files(tmp_path):
+    from app.utils import agent_logging
+
+    agent_logging.configure_agent_file_logging(
+        log_dir=tmp_path,
+        run_timestamp="20260622_095158",
+        verbose=True,
+    )
+
+    try:
+        agent_logging.log_agent_start("observer_agent", {"user_prompt": "observe"})
+        agent_logging.log_agent_end("observer_agent", {"observation": {"task_type": "demo"}})
+        agent_logging.log_agent_start("planner_agent", {"user_prompt": "plan"})
+        agent_logging.log_llm_request("planner_agent", {"input": "plan"})
+        agent_logging.log_agent_end("planner_agent", {"plan": {"agent_sequence": []}})
+    finally:
+        agent_logging.close_agent_file_logging()
+
+    observer_log = tmp_path / "observer_20260622_095158.log"
+    planner_log = tmp_path / "planner_20260622_095158.log"
+
+    assert observer_log.exists()
+    assert planner_log.exists()
+    assert "[observer_agent] agent call started" in observer_log.read_text()
+    assert "[planner_agent] agent call started" in planner_log.read_text()
+    assert "LLM request JSON" in planner_log.read_text()
+    assert "planner_agent" not in observer_log.read_text()
