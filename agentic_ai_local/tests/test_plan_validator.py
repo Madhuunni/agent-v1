@@ -67,8 +67,9 @@ def test_planner_uses_fallback_sequence_when_llm_plan_fails_dependencies(monkeyp
         "executor_agent",
         "report_agent",
     ]
-    assert any("code_generator_agent requires" in e["error"] for e in result["errors"])
+    assert result["errors"] == []
     assert "planner_agent_fallback_notes" in result["agent_outputs"]
+    assert any("code_generator_agent requires" in e for e in result["agent_outputs"]["planner_agent_recovered_errors"])
 
 
 def test_planner_fallback_runs_browser_action_prompts_with_url(monkeypatch):
