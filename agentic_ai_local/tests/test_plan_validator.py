@@ -69,3 +69,51 @@ def test_planner_uses_fallback_sequence_when_llm_plan_fails_dependencies(monkeyp
     ]
     assert any("code_generator_agent requires" in e["error"] for e in result["errors"])
     assert "planner_agent_fallback_notes" in result["agent_outputs"]
+
+
+def test_planner_fallback_runs_browser_action_prompts_with_url(monkeypatch):
+    from app.agents import planner_agent
+    from app.schemas.agent_plan import AgentPlan
+
+    bad_plan = AgentPlan(
+        task_type="Test Automation",
+        goal="Navigate to http://localhost:4200/. Enter email t@t.com. Click login.",
+        agent_sequence=["requirement_agent", "report_agent"],
+        requires_browser=False,
+        requires_code_generation=False,
+        requires_execution=False,
+        risk_level="low",
+    )
+
+    monkeypatch.setattr(
+        planner_agent,
+        "invoke_json",
+        lambda schema, system, payload, fallback: (bad_plan, None),
+    )
+
+    result = planner_agent.run(
+        {
+            "user_prompt": "Navigate to http://localhost:4200/. Enter email t@t.com. Click login.",
+            "observation": {
+                "task_type": "Test Automation",
+                "detected_url": "http://localhost:4200/",
+                "requires_execution": True,
+                "requires_code_generation": True,
+            },
+            "max_retries": 2,
+            "max_iterations": 8,
+        }
+    )
+
+    assert result["pending_agents"] == [
+        "requirement_agent",
+        "dom_agent",
+        "locator_agent",
+        "test_plan_agent",
+        "code_generator_agent",
+        "code_validator_agent",
+        "executor_agent",
+        "report_agent",
+    ]
+    assert result["execution_plan"]["requires_execution"] is True
+    assert result["execution_plan"]["requires_code_generation"] is True
