@@ -113,3 +113,24 @@ def test_requirement_agent_continues_when_local_llm_unavailable(monkeypatch):
         "continuing with deterministic requirements"
         in result["agent_outputs"]["requirement_agent_llm_notes"]
     )
+
+
+def test_observer_treats_browser_action_prompt_as_executable_test():
+    from app.agents import observer_agent
+
+    result = observer_agent.run(
+        {
+            "user_prompt": (
+                "Navigate to http://localhost:4200/. Enter email t@t.com and "
+                "password test123. Click login. Validate Dashboard, Profile, "
+                "and Logout are present."
+            )
+        }
+    )
+
+    observation = result["observation"]
+    assert observation["detected_url"] == "http://localhost:4200/"
+    assert observation["task_type"] == "selenium_test_generation"
+    assert observation["requires_dom_inspection"] is True
+    assert observation["requires_code_generation"] is True
+    assert observation["requires_execution"] is True

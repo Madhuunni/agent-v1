@@ -12,7 +12,31 @@ def _detect_url(prompt: str) -> str | None:
 
 def _fallback_observation(prompt: str) -> Observation:
     low = prompt.lower(); url = _detect_url(prompt)
-    return Observation(user_goal=prompt, task_type="selenium_test_generation" if any(w in low for w in ["selenium", "test"]) else "browser_inspection", detected_url=url, requires_dom_inspection=bool(url and any(w in low for w in ["inspect","page","dom","selenium","test"])), requires_code_generation=any(w in low for w in ["generate", "code", "selenium", "test"]), requires_execution=any(w in low for w in ["run","execute"]), requires_debugging=any(w in low for w in ["fix","debug","failed"]), available_agents=sorted(ALLOWED_AGENTS), available_tools=["browser_dom_reader","selenium_runner","file_writer","python_syntax_checker"], known_context=load_memory(), existing_generated_tests=[p.name for p in GENERATED_TESTS_DIR.glob('*.py')], existing_run_logs=[p.name for p in RUN_LOGS_DIR.glob('*')], risks=[])
+    automation_terms = ["selenium", "test", "navigate", "enter", "click", "login", "validate", "verify"]
+    is_automation = any(w in low for w in automation_terms)
+    execution_terms = ["run", "execute", "navigate", "enter", "click", "login", "validate", "verify"]
+    return Observation(
+        user_goal=prompt,
+        task_type="selenium_test_generation" if is_automation else "browser_inspection",
+        detected_url=url,
+        requires_dom_inspection=bool(
+            url and any(w in low for w in ["inspect", "page", "dom", *automation_terms])
+        ),
+        requires_code_generation=is_automation,
+        requires_execution=any(w in low for w in execution_terms),
+        requires_debugging=any(w in low for w in ["fix", "debug", "failed"]),
+        available_agents=sorted(ALLOWED_AGENTS),
+        available_tools=[
+            "browser_dom_reader",
+            "selenium_runner",
+            "file_writer",
+            "python_syntax_checker",
+        ],
+        known_context=load_memory(),
+        existing_generated_tests=[p.name for p in GENERATED_TESTS_DIR.glob('*.py')],
+        existing_run_logs=[p.name for p in RUN_LOGS_DIR.glob('*')],
+        risks=[],
+    )
 
 def run(state: dict) -> dict:
     prompt = state.get('user_prompt','')
