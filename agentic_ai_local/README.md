@@ -4,6 +4,10 @@ A local-first dynamic multi-agent framework for Selenium automation using Python
 
 ## Architecture
 
+![Prompt-to-result architecture](../docs/prompt-to-result-architecture.svg)
+
+The diagram above shows the stage-by-stage execution path from a user prompt to the final result.
+
 ```text
 User Prompt
   -> Observer Agent
