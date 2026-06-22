@@ -104,15 +104,16 @@ def run(state: dict) -> dict:
     steps = _steps_with_navigation(plan)
     if not steps:
         lines.append('            pass')
+    emitters = {
+        'navigate': lambda step, target: [f"            driver.get({target})", f"            wait.until(lambda d: d.current_url.startswith({target}))"],
+        'type': lambda step, target: [f"            wait.until(EC.visibility_of_element_located(({_selector(step.get('by'))}, {target}))).send_keys(env_value({repr(step.get('value_from_env'))}) if {repr(step.get('value_from_env'))} else {repr(step.get('value') or '')})"],
+        'click': lambda step, target: [f"            wait.until(EC.element_to_be_clickable(({_selector(step.get('by'))}, {target}))).click()"],
+        'assert_text': lambda step, target: [f"            wait.until(lambda d: {target} in d.find_element(By.TAG_NAME, 'body').text)"],
+    }
     for step in steps:
-        action=step['action']; target=repr(step['target'])
+        target=repr(step['target'])
         lines.append(f"            print({repr(step.get('description','step'))})")
-        if action=='navigate':
-            lines.append(f"            driver.get({target})")
-            lines.append(f"            wait.until(lambda d: d.current_url.startswith({target}))")
-        elif action=='type': lines.append(f"            wait.until(EC.visibility_of_element_located(({_selector(step.get('by'))}, {target}))).send_keys(env_value({repr(step.get('value_from_env'))}) if {repr(step.get('value_from_env'))} else {repr(step.get('value') or '')})")
-        elif action=='click': lines.append(f"            wait.until(EC.element_to_be_clickable(({_selector(step.get('by'))}, {target}))).click()")
-        elif action=='assert_text': lines.append(f"            wait.until(lambda d: {target} in d.find_element(By.TAG_NAME, 'body').text)")
+        lines.extend(emitters.get(step['action'], lambda _step, _target: [f"            print('Skipped unsupported action: {step['action']}')"])(step, target))
     lines += ['        except Exception:','            RUN_LOGS.mkdir(exist_ok=True)','            screenshot = RUN_LOGS / "screenshots" / "failure.png"','            screenshot.parent.mkdir(exist_ok=True)','            driver.save_screenshot(str(screenshot))','            raise','        finally:','            driver.quit()','','if __name__ == "__main__":','    main()','']
     path = GENERATED_TESTS_DIR / f"{slugify(plan.get('name','generated_test'))}.py"; path.write_text('\n'.join(lines))
     req_env = sorted({s.get('value_from_env') for s in steps if s.get('value_from_env')})

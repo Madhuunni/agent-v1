@@ -1,7 +1,7 @@
 Agent Flow and File Responsibilities
 ====================================
 
-This project is a local, LangGraph-based Selenium automation pipeline. A user supplies a natural-language prompt, the graph turns that prompt into structured requirements, optionally inspects a browser DOM, selects locators, generates Selenium code, validates and optionally executes that code, and finally produces a Markdown run report.
+This project is a local, LangGraph-based Selenium automation pipeline. A user supplies a natural-language prompt, each agent asks the configured local LLM to convert its inputs into a schema-valid JSON output, the graph optionally inspects a browser DOM, selects locators, generates Selenium code, validates and optionally executes that code, and finally produces a Markdown run report. Schema-valid deterministic fallbacks keep the pipeline usable when the local LLM is unavailable.
 
 End-to-end prompt-to-report flow
 --------------------------------
@@ -17,11 +17,12 @@ End-to-end prompt-to-report flow
    - The router chooses the next agent from `pending_agents`; each agent returns to the router until the graph reaches `report_agent` and then END.
 
 3. Observation
-   - `observer_agent` reads `user_prompt` and extracts coarse facts: detected URL, task type, whether DOM inspection/code generation/execution/debugging appear necessary, existing generated test files, existing run logs, available agents, and persisted local memory.
+   - `observer_agent` builds a JSON input containing `user_prompt`, available agents, persisted memory, existing generated test files, and existing run logs.
+   - The local LLM converts that input into an `Observation` JSON object with the detected URL, task type, required capabilities, tools, and risks. If the LLM is unavailable, a schema-valid fallback observation is used and the fallback reason is recorded in `agent_outputs`.
    - This becomes `observation` in the shared graph state.
 
 4. Planning
-   - `planner_agent` uses the observation and prompt keywords to choose an ordered `agent_sequence`.
+   - `planner_agent` sends the prompt, observation, and runtime limits to the local LLM and receives an `AgentPlan` JSON object containing an ordered `agent_sequence`.
    - The sequence is validated by `validate_plan` in `graph/router.py` so dependent agents appear only after their prerequisites. For example, locator selection requires a DOM snapshot, code generation requires a test plan, and validation requires generated code.
    - The validated sequence is stored as `execution_plan` and copied to `pending_agents`.
 
@@ -31,23 +32,23 @@ End-to-end prompt-to-report flow
    - `make_agent_node` wraps every agent with common bookkeeping: merge the agent output with state, record completed agents and per-agent outputs, and route errors into retry/report behavior.
 
 6. Requirement extraction
-   - `requirement_agent` transforms the prompt into structured test requirements.
-   - It records the base URL, preconditions, ordered requirement steps, success criteria, and missing information.
-   - For login prompts, it adds username, password, submit, and dashboard assertion steps and uses `APP_USERNAME` and `APP_PASSWORD` as environment-backed inputs.
-   - It also asks the configured local LLM for concise notes, but falls back to deterministic requirements if the local LLM is unavailable.
+   - `requirement_agent` sends the prompt and observation as JSON to the local LLM.
+   - The LLM returns a `Requirement` JSON object containing the base URL, preconditions, ordered requirement steps, success criteria, and missing information.
+   - Login secrets are represented structurally with `APP_USERNAME` and `APP_PASSWORD` environment-backed inputs.
+   - If local LLM JSON generation fails, the agent returns a schema-valid fallback requirement and records the reason in `agent_outputs`.
 
 7. DOM inspection
    - `dom_agent` chooses the URL from `requirement.base_url` or `observation.detected_url` and calls the browser DOM reader.
    - The resulting `dom_snapshot` includes page metadata and extracted elements that downstream agents use for locator selection.
 
 8. Locator selection
-   - `locator_agent` compares each actionable requirement step with DOM inputs/buttons.
-   - It prefers stable attributes in this order: id, name, then CSS selector, and records fallback XPath values when available.
+   - `locator_agent` sends requirements and DOM snapshot JSON to the local LLM.
+   - The LLM returns a `LocatorResult` JSON object that matches actionable steps to DOM inputs/buttons, preferring id, then name, then CSS selector, then XPath and recording fallback locators when available.
    - The selected locators are stored in `selected_locators`; anything unmatched is listed as a missing target.
 
 9. Test plan generation
-   - `test_plan_agent` combines requirements and locators into executable `TestStep` objects.
-   - It keeps navigation steps, converts text assertions to body-text checks, and attaches locator strategy/value pairs to type and click actions.
+   - `test_plan_agent` sends requirements and selected locators as JSON to the local LLM.
+   - The LLM returns a `TestPlan` JSON object with executable `TestStep` entries; deterministic fallback generation only runs if LLM JSON validation fails.
    - The result is stored as `test_plan`.
 
 10. Selenium code generation
@@ -66,7 +67,7 @@ End-to-end prompt-to-report flow
 
 13. Optional debugging and retry
    - If an executor error is raised and retry budget remains, `after_agent` schedules `debug_agent`, `code_generator_agent`, `code_validator_agent`, `executor_agent`, and `report_agent`.
-   - `debug_agent` classifies likely causes such as timeout, missing selector, authentication failure, browser error, or unknown failure.
+   - `debug_agent` sends execution output and accumulated errors to the local LLM and receives a `DebugResult` JSON object that classifies likely causes such as timeout, missing selector, authentication failure, browser error, or unknown failure.
    - The retry path allows regeneration and revalidation before the final report.
 
 14. Final report generation
@@ -99,7 +100,8 @@ Key files and responsibilities
 - `agentic_ai_local/app/schemas/*.py`: Pydantic/Typer-compatible contracts that keep observations, requirements, plans, locators, generated code, execution results, and reports structured.
 - `agentic_ai_local/app/tools/*.py`: Integration layer for browser DOM extraction, Selenium script execution, filesystem work, Python validation, and safety checks.
 - `agentic_ai_local/app/prompts/*.py`: Prompt templates for future or local LLM-backed versions of each agent role.
-- `agentic_ai_local/app/llm/local_llm.py`: Local chat model factory used by requirement extraction notes.
+- `agentic_ai_local/app/llm/local_llm.py`: Local chat model factory used by JSON-backed agents.
+- `agentic_ai_local/app/llm/structured.py`: Shared helper that prompts the local LLM for schema-valid JSON, extracts the JSON object, validates it with Pydantic, and falls back to deterministic schema-valid outputs when needed.
 - `agentic_ai_local/app/memory/memory_store.py`: Lightweight local memory loader used by observation.
 - `agentic_ai_local/tests/*.py`: Unit tests for graph routing, schema validation, CLI behavior, browser tooling, validators, and generated code behavior.
 

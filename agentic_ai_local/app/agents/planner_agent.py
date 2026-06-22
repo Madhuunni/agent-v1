@@ -1,32 +1,29 @@
 from __future__ import annotations
 from app.graph.router import validate_plan
+from app.llm.structured import invoke_json
 from app.schemas.agent_plan import AgentPlan
 
-def _sequence(prompt: str, obs: dict) -> list[str]:
-    """Select the minimal specialist-agent path required by the prompt.
-
-    The planner is intentionally deterministic: prompt keywords and observed
-    URL availability decide whether the run should only report requirements,
-    inspect the DOM, generate code, execute code, or enter a debug/retry path.
-    """
-
-    low = prompt.lower(); has_url = bool(obs.get('detected_url'))
-    if any(w in low for w in ['fix','debug','failed']): return ["executor_agent","debug_agent","code_generator_agent","code_validator_agent","executor_agent","report_agent"]
-    if "existing" in low and any(w in low for w in ['run','execute']): return ["executor_agent","report_agent"]
-    if not has_url and any(w in low for w in ['dom','selenium','test','page']): return ["requirement_agent","report_agent"]
-    if "inspect" in low and "test" not in low and "generate" not in low: return ["dom_agent","report_agent"]
-    if "plan" in low and "code" not in low and not any(w in low for w in ['run','execute']): return ["requirement_agent","dom_agent","locator_agent","test_plan_agent","report_agent"]
-    if any(w in low for w in ['run','execute']): return ["requirement_agent","dom_agent","locator_agent","test_plan_agent","code_generator_agent","code_validator_agent","executor_agent","report_agent"]
-    if "generate" in low or "code" in low: return ["requirement_agent","dom_agent","locator_agent","test_plan_agent","code_generator_agent","code_validator_agent","report_agent"]
-    return ["requirement_agent","report_agent"]
+def _fallback_plan(prompt: str, obs: dict, state: dict) -> AgentPlan:
+    has_url = bool(obs.get("detected_url")); low = prompt.lower()
+    sequences = [
+        (("fix", "debug", "failed"), ["executor_agent","debug_agent","code_generator_agent","code_validator_agent","executor_agent","report_agent"]),
+        (("run", "execute"), ["requirement_agent","dom_agent","locator_agent","test_plan_agent","code_generator_agent","code_validator_agent","executor_agent","report_agent"]),
+        (("generate", "code"), ["requirement_agent","dom_agent","locator_agent","test_plan_agent","code_generator_agent","code_validator_agent","report_agent"]),
+        (("plan",), ["requirement_agent","dom_agent","locator_agent","test_plan_agent","report_agent"]),
+        (("inspect",), ["dom_agent","report_agent"] if has_url else ["requirement_agent","report_agent"]),
+    ]
+    seq = next((s for keys, s in sequences if any(k in low for k in keys)), ["requirement_agent","report_agent"])
+    if not has_url and any(a in seq for a in ("dom_agent", "locator_agent", "test_plan_agent", "code_generator_agent")):
+        seq = ["requirement_agent", "report_agent"]
+    return AgentPlan(task_type=obs.get("task_type","unknown"), goal=prompt, agent_sequence=seq, requires_browser="dom_agent" in seq, requires_code_generation="code_generator_agent" in seq, requires_execution="executor_agent" in seq, requires_debugging="debug_agent" in seq, max_retries=state.get("max_retries",2), max_iterations=state.get("max_iterations",8), risk_level="medium" if "executor_agent" in seq else "low")
 
 def run(state: dict) -> dict:
-    """Create an AgentPlan and seed the router queue with pending agents."""
-
-    obs = state.get('observation') or {}; prompt = state.get('user_prompt','')
-    seq = _sequence(prompt, obs)
-    plan = AgentPlan(task_type=obs.get('task_type','unknown'), goal=prompt, agent_sequence=seq, requires_browser='dom_agent' in seq, requires_code_generation='code_generator_agent' in seq, requires_execution='executor_agent' in seq, requires_debugging='debug_agent' in seq, max_retries=state.get('max_retries',2), max_iterations=state.get('max_iterations',8), risk_level='medium' if 'executor_agent' in seq else 'low', notes=[])
+    obs = state.get("observation") or {}; prompt = state.get("user_prompt", "")
+    fallback = _fallback_plan(prompt, obs, state)
+    plan, note = invoke_json(AgentPlan, "You are a planning agent. Convert the user request and observation into a minimal ordered specialist-agent JSON plan. Obey prerequisite order and use only allowed agent names.", {"user_prompt": prompt, "observation": obs, "limits": {"max_retries": state.get("max_retries", 2), "max_iterations": state.get("max_iterations", 8)}}, fallback)
     ok, errors, _ = validate_plan(plan.model_dump(), state)
+    agent_outputs = {**state.get("agent_outputs", {})}
+    if note: agent_outputs["planner_agent_llm_notes"] = note
     if not ok:
-        return {"execution_plan": plan.model_dump(), "pending_agents": ["report_agent"], "errors": state.get('errors', []) + [{"agent":"planner_agent","error":"; ".join(errors)}]}
-    return {"execution_plan": plan.model_dump(), "pending_agents": seq, "max_retries": plan.max_retries, "max_iterations": plan.max_iterations}
+        return {"execution_plan": fallback.model_dump(), "pending_agents": ["report_agent"], "agent_outputs": agent_outputs, "errors": state.get("errors", []) + [{"agent":"planner_agent","error":"; ".join(errors)}]}
+    return {"execution_plan": plan.model_dump(), "pending_agents": plan.agent_sequence, "max_retries": plan.max_retries, "max_iterations": plan.max_iterations, "agent_outputs": agent_outputs}

@@ -1,13 +1,24 @@
 from __future__ import annotations
+from app.llm.structured import invoke_json
 from app.schemas.test_plan import TestPlan, TestStep
 
-def run(state: dict) -> dict:
-    req = state.get('requirement') or {}; locs = {l['step_number']: l for l in (state.get('selected_locators') or {}).get('locators', [])}
-    steps=[]
+def _fallback(req: dict, selected: dict) -> TestPlan:
+    locs = {l['step_number']: l for l in selected.get('locators', [])}
+    builders = {
+        'navigate': lambda s: TestStep(action='navigate', target=s.get('value') or req.get('base_url') or '', description='Navigate to application').model_dump(),
+        'assert_text': lambda s: TestStep(action='assert_text', by='body', target=s.get('expected_result') or s['target_description'], description='Verify expected text').model_dump(),
+    }
+    steps = []
     for s in req.get('steps', []):
-        if s['action']=='navigate': steps.append(TestStep(action='navigate', target=s.get('value') or req.get('base_url') or '', description='Navigate to application').model_dump()); continue
-        if s['action']=='assert_text': steps.append(TestStep(action='assert_text', by='body', target=s.get('expected_result') or s['target_description'], description='Verify expected text').model_dump()); continue
         loc = locs.get(s['step_number'])
-        if loc: steps.append(TestStep(action=s['action'], by=loc['selected_by'], target=loc['selected_locator'], value=s.get('value'), value_from_env=s.get('value_from_env'), description=s['target_description']).model_dump())
-    plan = TestPlan(name=req.get('name','Generated Selenium Test'), base_url=req.get('base_url'), steps=steps, assertions=[], warnings=[])
-    return {"test_plan": plan.model_dump()}
+        build = builders.get(s['action'])
+        item = build(s) if build else (TestStep(action=s['action'], by=loc['selected_by'], target=loc['selected_locator'], value=s.get('value'), value_from_env=s.get('value_from_env'), description=s['target_description']).model_dump() if loc else None)
+        if item: steps.append(item)
+    return TestPlan(name=req.get('name','Generated Selenium Test'), base_url=req.get('base_url'), steps=steps, assertions=[], warnings=[])
+
+def run(state: dict) -> dict:
+    req = state.get('requirement') or {}; selected = state.get('selected_locators') or {}
+    plan, note = invoke_json(TestPlan, "You are a test-plan agent. Convert requirements and selected locators into executable Selenium TestStep JSON. Do not invent locators.", {"requirement": req, "selected_locators": selected}, _fallback(req, selected))
+    outputs = {**state.get("agent_outputs", {})}
+    if note: outputs["test_plan_agent_llm_notes"] = note
+    return {"test_plan": plan.model_dump(), "agent_outputs": outputs}
