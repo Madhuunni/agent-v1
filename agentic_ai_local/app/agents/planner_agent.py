@@ -68,13 +68,14 @@ def run(state: dict) -> dict:
         planner_error = {"agent": "planner_agent", "error": "; ".join(plan_errors)}
         if fallback_ok:
             agent_outputs["planner_agent_fallback_notes"] = "Local LLM plan failed validation or omitted required capabilities; continuing with deterministic fallback plan."
+            agent_outputs["planner_agent_recovered_errors"] = plan_errors
             return {
                 "execution_plan": fallback.model_dump(),
                 "pending_agents": fallback.agent_sequence,
                 "max_retries": fallback.max_retries,
                 "max_iterations": fallback.max_iterations,
                 "agent_outputs": agent_outputs,
-                "errors": state.get("errors", []) + [planner_error],
+                "errors": state.get("errors", []),
             }
         return {
             "execution_plan": fallback.model_dump(),
