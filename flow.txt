@@ -1,0 +1,120 @@
+Agent Flow and File Responsibilities
+====================================
+
+This project is a local, LangGraph-based Selenium automation pipeline. A user supplies a natural-language prompt, the graph turns that prompt into structured requirements, optionally inspects a browser DOM, selects locators, generates Selenium code, validates and optionally executes that code, and finally produces a Markdown run report.
+
+End-to-end prompt-to-report flow
+--------------------------------
+
+1. Prompt entry
+   - The prompt enters through either `agentic_ai_local/app/cli.py` or the demo block in `agentic_ai_local/app/main.py`.
+   - The CLI loads environment variables, configures logging, applies runtime options such as model name and headless browser mode, then calls `build_graph().invoke(initial_state(prompt, ...))`.
+   - `initial_state` stores the raw prompt in `user_prompt` and initializes all graph outputs, retry counters, and stop flags.
+
+2. Graph construction
+   - `agentic_ai_local/app/graph/builder.py` creates the LangGraph state machine.
+   - The graph starts at `observer_agent`, moves to `planner_agent`, then repeatedly visits `router`.
+   - The router chooses the next agent from `pending_agents`; each agent returns to the router until the graph reaches `report_agent` and then END.
+
+3. Observation
+   - `observer_agent` reads `user_prompt` and extracts coarse facts: detected URL, task type, whether DOM inspection/code generation/execution/debugging appear necessary, existing generated test files, existing run logs, available agents, and persisted local memory.
+   - This becomes `observation` in the shared graph state.
+
+4. Planning
+   - `planner_agent` uses the observation and prompt keywords to choose an ordered `agent_sequence`.
+   - The sequence is validated by `validate_plan` in `graph/router.py` so dependent agents appear only after their prerequisites. For example, locator selection requires a DOM snapshot, code generation requires a test plan, and validation requires generated code.
+   - The validated sequence is stored as `execution_plan` and copied to `pending_agents`.
+
+5. Routing loop
+   - `router_node` calls `route_next`, which pops the next agent from `pending_agents`, stores it in `current_agent`, and increments `iteration_count`.
+   - `route_condition` sends graph execution to that agent node, or to END if there is no current agent or the graph has stopped.
+   - `make_agent_node` wraps every agent with common bookkeeping: merge the agent output with state, record completed agents and per-agent outputs, and route errors into retry/report behavior.
+
+6. Requirement extraction
+   - `requirement_agent` transforms the prompt into structured test requirements.
+   - It records the base URL, preconditions, ordered requirement steps, success criteria, and missing information.
+   - For login prompts, it adds username, password, submit, and dashboard assertion steps and uses `APP_USERNAME` and `APP_PASSWORD` as environment-backed inputs.
+   - It also asks the configured local LLM for concise notes, but falls back to deterministic requirements if the local LLM is unavailable.
+
+7. DOM inspection
+   - `dom_agent` chooses the URL from `requirement.base_url` or `observation.detected_url` and calls the browser DOM reader.
+   - The resulting `dom_snapshot` includes page metadata and extracted elements that downstream agents use for locator selection.
+
+8. Locator selection
+   - `locator_agent` compares each actionable requirement step with DOM inputs/buttons.
+   - It prefers stable attributes in this order: id, name, then CSS selector, and records fallback XPath values when available.
+   - The selected locators are stored in `selected_locators`; anything unmatched is listed as a missing target.
+
+9. Test plan generation
+   - `test_plan_agent` combines requirements and locators into executable `TestStep` objects.
+   - It keeps navigation steps, converts text assertions to body-text checks, and attaches locator strategy/value pairs to type and click actions.
+   - The result is stored as `test_plan`.
+
+10. Selenium code generation
+   - `code_generator_agent` turns `test_plan` into a Python Selenium script under the generated tests directory.
+   - It writes browser setup, ChromeDriver handling, headless options, step-by-step Selenium commands, screenshot-on-failure logic, and environment variable reads for secrets.
+   - Metadata about the generated file and required environment variables is stored in `generated_code`.
+
+11. Code validation
+   - `code_validator_agent` validates the generated Python file with the local Python validator.
+   - Syntax or validation errors are appended to the graph `errors` list and captured in `code_validation_result`.
+
+12. Optional execution
+   - `executor_agent` runs the generated script with the Selenium runner when the plan includes execution.
+   - It stores stdout, stderr, success status, and log file details in `execution_result`.
+   - On failure, it appends an executor error so the final report can show what happened.
+
+13. Optional debugging and retry
+   - If an executor error is raised and retry budget remains, `after_agent` schedules `debug_agent`, `code_generator_agent`, `code_validator_agent`, `executor_agent`, and `report_agent`.
+   - `debug_agent` classifies likely causes such as timeout, missing selector, authentication failure, browser error, or unknown failure.
+   - The retry path allows regeneration and revalidation before the final report.
+
+14. Final report generation
+   - `report_agent` is the terminal reporting step.
+   - It builds a Markdown report from the accumulated state: original request, detected task type, executed agents, JSON plan, local LLM notes, DOM inspection summary, generated files, execution status, missing information, errors, retry count, and final recommendation.
+   - It returns `final_report` and sets `stop=True`, causing the router condition to end graph execution.
+
+Key files and responsibilities
+-------------------------------
+
+- `agentic_ai_local/app/cli.py`: Production command-line entry point. Parses the prompt and runtime options, configures environment/logging, invokes the graph, prints the report, and writes a timestamped report file.
+- `agentic_ai_local/app/main.py`: Minimal local demo entry point with a hard-coded sample prompt.
+- `agentic_ai_local/app/config.py`: Central paths and settings for generated tests, run logs, browser/runtime configuration, and local LLM configuration.
+- `agentic_ai_local/app/graph/state.py`: Defines the shared graph state contract and the initialized state object used at the start of every run.
+- `agentic_ai_local/app/graph/builder.py`: Wires LangGraph nodes and edges: observer -> planner -> router -> selected agents -> router -> report/end.
+- `agentic_ai_local/app/graph/nodes.py`: Adapts agent `run(state)` functions into graph nodes and applies common after-agent bookkeeping/error handling.
+- `agentic_ai_local/app/graph/router.py`: Validates plans, chooses the next pending agent, records completed agents, stores outputs, and schedules retry/report paths after failures.
+- `agentic_ai_local/app/graph/conditions.py`: Converts `current_agent` and `stop` state into LangGraph branch names.
+- `agentic_ai_local/app/agents/observer_agent.py`: Converts the raw prompt into an observation and discovers existing local context.
+- `agentic_ai_local/app/agents/planner_agent.py`: Chooses the agent sequence based on prompt intent and validates that sequence.
+- `agentic_ai_local/app/agents/requirement_agent.py`: Converts the prompt into structured requirements and optional local LLM notes.
+- `agentic_ai_local/app/agents/dom_agent.py`: Reads browser DOM information for the target URL.
+- `agentic_ai_local/app/agents/locator_agent.py`: Chooses Selenium locator strategies for actionable requirements.
+- `agentic_ai_local/app/agents/test_plan_agent.py`: Converts requirements plus locators into executable test steps.
+- `agentic_ai_local/app/agents/code_generator_agent.py`: Writes the Selenium Python script and reports generated-file metadata.
+- `agentic_ai_local/app/agents/code_validator_agent.py`: Validates generated Python code before execution.
+- `agentic_ai_local/app/agents/executor_agent.py`: Runs generated or existing Selenium scripts and stores execution results.
+- `agentic_ai_local/app/agents/debug_agent.py`: Classifies execution failures and recommends retry strategy.
+- `agentic_ai_local/app/agents/report_agent.py`: Creates the final Markdown report from graph state.
+- `agentic_ai_local/app/schemas/*.py`: Pydantic/Typer-compatible contracts that keep observations, requirements, plans, locators, generated code, execution results, and reports structured.
+- `agentic_ai_local/app/tools/*.py`: Integration layer for browser DOM extraction, Selenium script execution, filesystem work, Python validation, and safety checks.
+- `agentic_ai_local/app/prompts/*.py`: Prompt templates for future or local LLM-backed versions of each agent role.
+- `agentic_ai_local/app/llm/local_llm.py`: Local chat model factory used by requirement extraction notes.
+- `agentic_ai_local/app/memory/memory_store.py`: Lightweight local memory loader used by observation.
+- `agentic_ai_local/tests/*.py`: Unit tests for graph routing, schema validation, CLI behavior, browser tooling, validators, and generated code behavior.
+
+Important state fields
+----------------------
+
+- `user_prompt`: Original user request.
+- `observation`: Prompt-derived facts and discovered local context.
+- `execution_plan`: Validated high-level plan and agent sequence.
+- `pending_agents`: Queue of remaining agents selected by the planner/router.
+- `completed_agents`: Ordered list of agents that successfully ran.
+- `current_agent`: Agent selected by the router for the next graph branch.
+- `agent_outputs`: Per-agent raw outputs for reporting and debugging.
+- `requirement`, `dom_snapshot`, `selected_locators`, `test_plan`, `generated_code`, `code_validation_result`, `execution_result`, `debug_result`: Main pipeline artifacts.
+- `errors`: Accumulated recoverable or terminal errors.
+- `retry_count`, `max_retries`, `max_iterations`, `iteration_count`: Safety counters that limit loops and retries.
+- `final_report`: Markdown output returned to the caller and written by the CLI.
+- `stop`: Terminal flag set by report generation.

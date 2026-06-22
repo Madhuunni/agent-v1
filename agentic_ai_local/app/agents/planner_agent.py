@@ -3,6 +3,13 @@ from app.graph.router import validate_plan
 from app.schemas.agent_plan import AgentPlan
 
 def _sequence(prompt: str, obs: dict) -> list[str]:
+    """Select the minimal specialist-agent path required by the prompt.
+
+    The planner is intentionally deterministic: prompt keywords and observed
+    URL availability decide whether the run should only report requirements,
+    inspect the DOM, generate code, execute code, or enter a debug/retry path.
+    """
+
     low = prompt.lower(); has_url = bool(obs.get('detected_url'))
     if any(w in low for w in ['fix','debug','failed']): return ["executor_agent","debug_agent","code_generator_agent","code_validator_agent","executor_agent","report_agent"]
     if "existing" in low and any(w in low for w in ['run','execute']): return ["executor_agent","report_agent"]
@@ -14,6 +21,8 @@ def _sequence(prompt: str, obs: dict) -> list[str]:
     return ["requirement_agent","report_agent"]
 
 def run(state: dict) -> dict:
+    """Create an AgentPlan and seed the router queue with pending agents."""
+
     obs = state.get('observation') or {}; prompt = state.get('user_prompt','')
     seq = _sequence(prompt, obs)
     plan = AgentPlan(task_type=obs.get('task_type','unknown'), goal=prompt, agent_sequence=seq, requires_browser='dom_agent' in seq, requires_code_generation='code_generator_agent' in seq, requires_execution='executor_agent' in seq, requires_debugging='debug_agent' in seq, max_retries=state.get('max_retries',2), max_iterations=state.get('max_iterations',8), risk_level='medium' if 'executor_agent' in seq else 'low', notes=[])

@@ -8,6 +8,8 @@ def _selector(by: str | None) -> str:
     return {'id':'By.ID','name':'By.NAME','css':'By.CSS_SELECTOR','xpath':'By.XPATH','body':'By.TAG_NAME'}.get(by or 'css','By.CSS_SELECTOR')
 
 def _steps_with_navigation(plan: dict) -> list[dict]:
+    """Ensure generated Selenium scripts always start by opening the app URL."""
+
     steps = list(plan.get('steps') or [])
     has_navigation = any(step.get('action') == 'navigate' and step.get('target') for step in steps)
     base_url = plan.get('base_url')
@@ -17,6 +19,14 @@ def _steps_with_navigation(plan: dict) -> list[dict]:
     return steps
 
 def run(state: dict) -> dict:
+    """Render the structured test plan into an executable Selenium script.
+
+    The generated script owns browser startup, ChromeDriver resolution, each
+    planned user action/assertion, screenshot capture on failure, and cleanup.
+    Metadata returned here tells later agents where the file was written and
+    which environment variables are needed to run it.
+    """
+
     plan = state.get('test_plan') or {"name":"existing_or_debug_test","steps":[]}
     lines = [
         'from __future__ import annotations',

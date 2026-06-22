@@ -3,6 +3,14 @@ from app.utils.json_utils import dump_json
 
 
 def run(state: dict) -> dict:
+    """Assemble the terminal Markdown report from accumulated graph state.
+
+    This is the final pipeline step. It deliberately reads from many optional
+    artifacts because earlier planner decisions may skip DOM inspection, code
+    generation, or execution. Missing sections are omitted; errors and missing
+    information are surfaced so the caller knows what to provide or fix next.
+    """
+
     obs = state.get('observation') or {}; plan = state.get('execution_plan') or {}
     lines = [f"# Local Agent Run Report", "", f"## User Request\n{state.get('user_prompt','')}", f"## Detected Task Type\n{obs.get('task_type','unknown')}", f"## Agents Executed\n{', '.join(state.get('completed_agents', [])) or 'None'}", "## Plan", '```json', dump_json(plan), '```']
     llm_notes = (state.get("agent_outputs") or {}).get("requirement_agent_llm_notes")
