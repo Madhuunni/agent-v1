@@ -1,0 +1,144 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="920" viewBox="0 0 1400 920" role="img" aria-labelledby="title desc">
+  <title id="title">Prompt-to-result architecture for the Agentic AI Local pipeline</title>
+  <desc id="desc">Stage-by-stage execution from a user prompt through observation, planning, routing, agent execution, optional debug retry, and final result report.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#eef6ff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="primary" x1="0" x2="1">
+      <stop offset="0%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#14b8a6"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#0f172a" flood-opacity="0.14"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <style>
+      .title{font:700 34px Inter,Arial,sans-serif;fill:#0f172a}.subtitle{font:500 16px Inter,Arial,sans-serif;fill:#475569}
+      .stage{filter:url(#shadow)}.box{fill:#fff;stroke:#cbd5e1;stroke-width:2;rx:20}.boxAccent{fill:#eff6ff;stroke:#60a5fa;stroke-width:2;rx:20}
+      .loopBox{fill:#fff7ed;stroke:#fb923c;stroke-width:2;rx:20}.resultBox{fill:#ecfdf5;stroke:#34d399;stroke-width:2;rx:20}
+      .num{font:700 18px Inter,Arial,sans-serif;fill:#fff}.label{font:700 21px Inter,Arial,sans-serif;fill:#0f172a}.small{font:500 14px Inter,Arial,sans-serif;fill:#475569}
+      .micro{font:500 12px Inter,Arial,sans-serif;fill:#64748b}.arrow{stroke:#334155;stroke-width:2.6;fill:none;marker-end:url(#arrow)}
+      .dash{stroke:#fb923c;stroke-width:2.4;stroke-dasharray:8 7;fill:none;marker-end:url(#arrow)}.pill{fill:url(#primary)}
+      .lane{fill:#f1f5f9;stroke:#e2e8f0;stroke-width:1.5;rx:24}.artifact{fill:#f8fafc;stroke:#cbd5e1;rx:12}
+    </style>
+  </defs>
+
+  <rect width="1400" height="920" fill="url(#bg)"/>
+  <text x="700" y="54" text-anchor="middle" class="title">Agentic AI Local: Prompt-to-Result Execution Architecture</text>
+  <text x="700" y="84" text-anchor="middle" class="subtitle">A natural-language request is converted into validated state, dynamically routed agent work, optional browser execution, and a final Markdown report.</text>
+
+  <rect x="60" y="125" width="1280" height="690" class="lane"/>
+  <text x="90" y="160" class="small">LangGraph state machine with shared graph state</text>
+
+  <!-- Stage 1 -->
+  <g class="stage" transform="translate(95 205)">
+    <rect width="180" height="120" class="boxAccent"/>
+    <circle cx="30" cy="30" r="20" class="pill"/><text x="30" y="36" text-anchor="middle" class="num">1</text>
+    <text x="92" y="34" text-anchor="middle" class="label">Prompt entry</text>
+    <text x="24" y="66" class="small">CLI or demo invokes</text>
+    <text x="24" y="87" class="small">build_graph().invoke()</text>
+  </g>
+
+  <!-- Stage 2 -->
+  <g class="stage" transform="translate(330 205)">
+    <rect width="180" height="120" class="box"/>
+    <circle cx="30" cy="30" r="20" class="pill"/><text x="30" y="36" text-anchor="middle" class="num">2</text>
+    <text x="98" y="34" text-anchor="middle" class="label">Initialize state</text>
+    <text x="24" y="66" class="small">Stores user_prompt</text>
+    <text x="24" y="87" class="small">Sets counters, flags,</text>
+    <text x="24" y="106" class="small">and empty artifacts</text>
+  </g>
+
+  <!-- Stage 3 -->
+  <g class="stage" transform="translate(565 205)">
+    <rect width="180" height="120" class="box"/>
+    <circle cx="30" cy="30" r="20" class="pill"/><text x="30" y="36" text-anchor="middle" class="num">3</text>
+    <text x="102" y="34" text-anchor="middle" class="label">Observer</text>
+    <text x="24" y="66" class="small">Detects URL, task type,</text>
+    <text x="24" y="87" class="small">risks, tools, memory,</text>
+    <text x="24" y="106" class="small">and existing files</text>
+  </g>
+
+  <!-- Stage 4 -->
+  <g class="stage" transform="translate(800 205)">
+    <rect width="180" height="120" class="box"/>
+    <circle cx="30" cy="30" r="20" class="pill"/><text x="30" y="36" text-anchor="middle" class="num">4</text>
+    <text x="102" y="34" text-anchor="middle" class="label">Planner</text>
+    <text x="24" y="66" class="small">Builds ordered</text>
+    <text x="24" y="87" class="small">agent_sequence for</text>
+    <text x="24" y="106" class="small">the requested goal</text>
+  </g>
+
+  <!-- Stage 5 -->
+  <g class="stage" transform="translate(1035 205)">
+    <rect width="210" height="120" class="boxAccent"/>
+    <circle cx="30" cy="30" r="20" class="pill"/><text x="30" y="36" text-anchor="middle" class="num">5</text>
+    <text x="116" y="34" text-anchor="middle" class="label">Validate plan</text>
+    <text x="24" y="66" class="small">Checks allowed agents,</text>
+    <text x="24" y="87" class="small">dependencies, retries,</text>
+    <text x="24" y="106" class="small">and iteration limits</text>
+  </g>
+
+  <!-- Router loop -->
+  <g class="stage" transform="translate(150 430)">
+    <rect width="255" height="180" class="loopBox"/>
+    <circle cx="34" cy="34" r="21" class="pill"/><text x="34" y="40" text-anchor="middle" class="num">6</text>
+    <text x="132" y="38" text-anchor="middle" class="label">Router loop</text>
+    <text x="28" y="74" class="small">Pops next pending agent</text>
+    <text x="28" y="98" class="small">into current_agent.</text>
+    <text x="28" y="122" class="small">Each completed node returns</text>
+    <text x="28" y="146" class="small">to router until report/end.</text>
+  </g>
+
+  <g class="stage" transform="translate(485 402)">
+    <rect width="470" height="236" class="box"/>
+    <circle cx="34" cy="34" r="21" class="pill"/><text x="34" y="40" text-anchor="middle" class="num">7</text>
+    <text x="245" y="38" text-anchor="middle" class="label">Dynamic agent execution</text>
+    <rect x="32" y="70" width="190" height="42" class="artifact"/><text x="127" y="96" text-anchor="middle" class="small">Requirement extraction</text>
+    <rect x="248" y="70" width="190" height="42" class="artifact"/><text x="343" y="96" text-anchor="middle" class="small">DOM inspection</text>
+    <rect x="32" y="128" width="190" height="42" class="artifact"/><text x="127" y="154" text-anchor="middle" class="small">Locator selection</text>
+    <rect x="248" y="128" width="190" height="42" class="artifact"/><text x="343" y="154" text-anchor="middle" class="small">Test plan generation</text>
+    <rect x="32" y="186" width="190" height="42" class="artifact"/><text x="127" y="212" text-anchor="middle" class="small">Selenium code generation</text>
+    <rect x="248" y="186" width="190" height="42" class="artifact"/><text x="343" y="212" text-anchor="middle" class="small">Validate and execute</text>
+  </g>
+
+  <g class="stage" transform="translate(1035 430)">
+    <rect width="230" height="180" class="loopBox"/>
+    <circle cx="34" cy="34" r="21" class="pill"/><text x="34" y="40" text-anchor="middle" class="num">8</text>
+    <text x="132" y="38" text-anchor="middle" class="label">Debug / retry</text>
+    <text x="28" y="74" class="small">On execution failure,</text>
+    <text x="28" y="98" class="small">classify root cause and</text>
+    <text x="28" y="122" class="small">reschedule generator,</text>
+    <text x="28" y="146" class="small">validator, executor.</text>
+  </g>
+
+  <!-- Results -->
+  <g class="stage" transform="translate(330 700)">
+    <rect width="300" height="98" class="resultBox"/>
+    <circle cx="34" cy="34" r="21" class="pill"/><text x="34" y="40" text-anchor="middle" class="num">9</text>
+    <text x="162" y="38" text-anchor="middle" class="label">Report agent</text>
+    <text x="28" y="72" class="small">Builds final Markdown report from all state artifacts.</text>
+  </g>
+
+  <g class="stage" transform="translate(770 700)">
+    <rect width="300" height="98" class="resultBox"/>
+    <circle cx="34" cy="34" r="21" class="pill"/><text x="34" y="40" text-anchor="middle" class="num">10</text>
+    <text x="166" y="38" text-anchor="middle" class="label">Result</text>
+    <text x="28" y="72" class="small">Generated test files, logs, execution status, recommendations.</text>
+  </g>
+
+  <!-- arrows -->
+  <path d="M275 265 H330" class="arrow"/><path d="M510 265 H565" class="arrow"/><path d="M745 265 H800" class="arrow"/><path d="M980 265 H1035" class="arrow"/>
+  <path d="M1140 325 C1140 370 290 360 278 430" class="arrow"/>
+  <path d="M405 520 H485" class="arrow"/><path d="M955 520 H1035" class="arrow"/>
+  <path d="M1035 610 C970 675 700 658 630 735" class="dash"/>
+  <path d="M720 638 C690 678 580 664 545 700" class="arrow"/>
+  <path d="M630 749 H770" class="arrow"/>
+  <path d="M1035 510 C982 490 985 430 956 430" class="dash"/>
+
+  <text x="700" y="858" text-anchor="middle" class="micro">State artifacts: observation • execution_plan • pending_agents • requirement • dom_snapshot • selected_locators • test_plan • generated_code • validation/execution/debug results • final_report</text>
+</svg>
