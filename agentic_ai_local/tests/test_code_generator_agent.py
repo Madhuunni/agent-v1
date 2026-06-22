@@ -143,3 +143,41 @@ def test_generated_selenium_script_drops_invalid_navigation_and_uses_base_url(mo
     assert "driver.get('//body')" not in source
     assert "driver.get('http://localhost:4200')" in source
     compile(source, str(generated_path), "exec")
+
+
+def test_generated_selenium_script_falls_back_to_semantic_input_locator(monkeypatch, tmp_path):
+    generated_dir = tmp_path / "generated_tests"
+    generated_dir.mkdir()
+    monkeypatch.setattr(code_generator_agent, "GENERATED_TESTS_DIR", generated_dir)
+    monkeypatch.setattr(
+        code_generator_agent,
+        "relative_to_root",
+        lambda path: str(Path(path).relative_to(tmp_path)),
+    )
+
+    result = code_generator_agent.run(
+        {
+            "test_plan": {
+                "name": "semantic email fallback",
+                "base_url": "http://localhost:4200",
+                "steps": [
+                    {
+                        "action": "type",
+                        "by": "xpath",
+                        "target": "//input[@type='email']",
+                        "value": "t@t.com",
+                        "description": "the email input field",
+                    }
+                ],
+            }
+        }
+    )
+
+    generated_path = tmp_path / result["generated_code"]["file_path"]
+    source = generated_path.read_text()
+
+    assert "TimeoutException" in source
+    assert "def _semantic_input_candidates" in source
+    assert "input[formcontrolname*='email' i]" in source
+    assert 'type_into_element(driver, wait, By.XPATH, "//input[@type=\'email\']", \'the email input field\', env_value(None) if None else \'t@t.com\')' in source
+    compile(source, str(generated_path), "exec")
