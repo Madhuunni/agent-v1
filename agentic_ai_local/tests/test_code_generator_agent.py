@@ -103,3 +103,43 @@ def test_generated_selenium_script_pins_chromedriver_to_detected_browser(monkeyp
     assert "ChromeDriverManager(driver_version=browser_version).install()" in source
     assert "service = chromedriver_service()" in source
     compile(source, str(generated_path), "exec")
+
+
+def test_generated_selenium_script_drops_invalid_navigation_and_uses_base_url(monkeypatch, tmp_path):
+    generated_dir = tmp_path / "generated_tests"
+    generated_dir.mkdir()
+    monkeypatch.setattr(code_generator_agent, "GENERATED_TESTS_DIR", generated_dir)
+    monkeypatch.setattr(
+        code_generator_agent,
+        "relative_to_root",
+        lambda path: str(Path(path).relative_to(tmp_path)),
+    )
+
+    result = code_generator_agent.run(
+        {
+            "test_plan": {
+                "name": "invalid navigation login test",
+                "base_url": "http://localhost:4200",
+                "steps": [
+                    {
+                        "action": "navigate",
+                        "target": "//body",
+                        "description": "Invalid locator mistaken for URL",
+                    },
+                    {
+                        "action": "assert_text",
+                        "by": "body",
+                        "target": "Dashboard",
+                        "description": "Verify dashboard",
+                    },
+                ],
+            }
+        }
+    )
+
+    generated_path = tmp_path / result["generated_code"]["file_path"]
+    source = generated_path.read_text()
+
+    assert "driver.get('//body')" not in source
+    assert "driver.get('http://localhost:4200')" in source
+    compile(source, str(generated_path), "exec")

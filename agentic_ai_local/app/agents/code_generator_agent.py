@@ -1,22 +1,33 @@
 from __future__ import annotations
 from app.config import GENERATED_TESTS_DIR
 from app.schemas.generated_code import GeneratedCode
-from app.schemas.test_plan import TestStep
+from app.schemas.test_plan import TestStep, is_http_url
 from app.utils.paths import slugify, relative_to_root
 
 def _selector(by: str | None) -> str:
     return {'id':'By.ID','name':'By.NAME','css':'By.CSS_SELECTOR','xpath':'By.XPATH','body':'By.TAG_NAME'}.get(by or 'css','By.CSS_SELECTOR')
 
 def _steps_with_navigation(plan: dict) -> list[dict]:
-    """Ensure generated Selenium scripts always start by opening the app URL."""
+    """Ensure generated Selenium scripts always start with a valid app URL.
+
+    Local LLMs can occasionally confuse Selenium locators with navigation
+    targets (for example, ``//body``). Selenium's ``driver.get`` only accepts
+    absolute URLs, so invalid navigation steps are discarded and replaced with
+    the plan ``base_url`` when it is available.
+    """
 
     steps = list(plan.get('steps') or [])
-    has_navigation = any(step.get('action') == 'navigate' and step.get('target') for step in steps)
     base_url = plan.get('base_url')
-    if base_url and not has_navigation:
+    valid_steps = [
+        step
+        for step in steps
+        if step.get('action') != 'navigate' or is_http_url(str(step.get('target') or ''))
+    ]
+    has_navigation = any(step.get('action') == 'navigate' for step in valid_steps)
+    if base_url and is_http_url(str(base_url)) and not has_navigation:
         nav_step = TestStep(action='navigate', target=base_url, description='Navigate to application').model_dump()
-        steps.insert(0, nav_step)
-    return steps
+        valid_steps.insert(0, nav_step)
+    return valid_steps
 
 def run(state: dict) -> dict:
     """Render the structured test plan into an executable Selenium script.
