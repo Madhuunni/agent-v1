@@ -1,6 +1,8 @@
 from __future__ import annotations
+import inspect
 import json
 import re
+from pathlib import Path
 from typing import Any, TypeVar
 from pydantic import BaseModel, ValidationError
 from app.llm.local_llm import get_chat_model
@@ -23,6 +25,16 @@ def extract_json(text: str) -> str:
         return text[first:last + 1]
     raise ValueError('No JSON object found in local LLM output')
 
+def _default_layer(schema_name: str) -> str:
+    caller = inspect.stack()[2].filename
+    agent_name = Path(caller).stem
+    return agent_name if agent_name.endswith('_agent') else schema_name
+
+
+def _console_log_llm_output(layer: str, raw_text: str) -> None:
+    print(f"[{layer}] Local LLM raw output before invoke_json parsing:\n{raw_text}", flush=True)
+
+
 def invoke_json(schema: type[T], system: str, payload: dict[str, Any], fallback: T, layer: str | None = None) -> tuple[T, str | None]:
     """Ask the local LLM for one JSON object matching a Pydantic schema.
 
@@ -37,11 +49,12 @@ def invoke_json(schema: type[T], system: str, payload: dict[str, Any], fallback:
         f"Schema: {json.dumps(schema_json, indent=2)}\n\n"
         f"Input JSON: {json.dumps(payload, indent=2, default=str)}"
     )
-    log_layer = layer or schema.__name__
+    log_layer = layer or _default_layer(schema.__name__)
     log_llm_request(log_layer, request_json)
     try:
         response = get_chat_model().invoke(prompt)
         raw_text = _text(response)
+        _console_log_llm_output(log_layer, raw_text)
         data = json.loads(extract_json(raw_text))
         log_llm_response(log_layer, {"raw": raw_text, "json": data})
         return schema.model_validate(data), None
