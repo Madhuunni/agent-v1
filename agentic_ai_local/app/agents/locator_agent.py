@@ -6,9 +6,27 @@ from app.schemas.locator import LocatorChoice, LocatorResult
 
 _ACTIONLESS = {'navigate','assert_text','assert_url','wait','screenshot'}
 
+def _candidate_locators(el: dict) -> list[dict[str, str]]:
+    candidates: list[dict[str, str]] = []
+    pairs = [
+        ("id", el.get("id")),
+        ("name", el.get("name")),
+        ("css", el.get("css_selector")),
+        ("xpath", el.get("xpath")),
+    ]
+    for by, target in pairs:
+        if target and {"by": by, "target": target} not in candidates:
+            candidates.append({"by": by, "target": target})
+    for raw in el.get("candidate_selectors") or []:
+        by = raw.get("by")
+        target = raw.get("target")
+        if by in {"id", "name", "css", "xpath"} and target and {"by": by, "target": target} not in candidates:
+            candidates.append({"by": by, "target": target})
+    return candidates
+
 def _best(el: dict) -> tuple[str, str | None]:
-    pairs = [("id", el.get("id")), ("name", el.get("name")), ("css", el.get("css_selector")), ("xpath", el.get("xpath"))]
-    return next(((k, v) for k, v in pairs if v), ("css", None))
+    candidates = _candidate_locators(el)
+    return (candidates[0]["by"], candidates[0]["target"]) if candidates else ("css", None)
 
 def _tokens(text: str) -> set[str]:
     stop = {'the', 'a', 'an', 'to', 'and', 'or', 'field', 'button', 'link', 'input', 'click', 'enter', 'type', 'select'}
@@ -42,8 +60,10 @@ def _fallback(req: dict, dom: dict) -> LocatorResult:
         element = scored[0][1] if scored and scored[0][0] > 0 else None
         if element is None:
             missing.append(step.get('target_description', 'unknown target')); continue
+        candidates = _candidate_locators(element)
         by, locator = _best(element)
-        locators.append(LocatorChoice(step_number=step['step_number'], target_description=step['target_description'], selected_by=by, selected_locator=locator or '', confidence=0.9 if scored[0][0] >= 15 else 0.7, reason='Selected from navigated DOM control inventory matched against prompt wording', fallback_locators=[x for x in [element.get('css_selector'), element.get('xpath')] if x and x != locator]).model_dump())
+        fallbacks = [candidate for candidate in candidates if candidate != {'by': by, 'target': locator}]
+        locators.append(LocatorChoice(step_number=step['step_number'], target_description=step['target_description'], selected_by=by, selected_locator=locator or '', confidence=0.9 if scored[0][0] >= 15 else 0.7, reason='Selected from navigated DOM control inventory matched against prompt wording and available input/button metadata', fallback_locators=fallbacks).model_dump())
     if not dom.get('controls'):
         warnings.append('DOM snapshot did not include controls inventory; used legacy inputs/buttons/links pools.')
     return LocatorResult(locators=locators, missing_targets=missing, warnings=warnings)

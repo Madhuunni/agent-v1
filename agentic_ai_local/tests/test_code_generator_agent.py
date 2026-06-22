@@ -218,3 +218,47 @@ def test_generated_selenium_script_uses_semantic_click_fallback(monkeypatch, tmp
     assert "button, a, input[type='button'], input[type='submit'], [role='button']" in source
     assert "click_element(driver, wait, By.XPATH, \"//button[normalize-space()='Sign in']\", 'click sign in button')" in source
     compile(source, str(generated_path), "exec")
+
+
+def test_generated_selenium_script_uses_locator_candidates_before_semantic_fallback(monkeypatch, tmp_path):
+    generated_dir = tmp_path / "generated_tests"
+    generated_dir.mkdir()
+    monkeypatch.setattr(code_generator_agent, "GENERATED_TESTS_DIR", generated_dir)
+    monkeypatch.setattr(
+        code_generator_agent,
+        "relative_to_root",
+        lambda path: str(Path(path).relative_to(tmp_path)),
+    )
+
+    result = code_generator_agent.run(
+        {
+            "test_plan": {
+                "name": "candidate fallback",
+                "base_url": "http://localhost:4200",
+                "steps": [
+                    {
+                        "action": "click",
+                        "by": "css",
+                        "target": "button.primary",
+                        "description": "click sign in button",
+                        "locator_candidates": [
+                            {"by": "xpath", "target": "//button[normalize-space()='Sign in']"},
+                            {"by": "css", "target": "[data-testid='signin']"},
+                        ],
+                    }
+                ],
+            }
+        }
+    )
+
+    generated_path = tmp_path / result["generated_code"]["file_path"]
+    source = generated_path.read_text()
+
+    assert "def find_with_locator_candidates" in source
+    assert "locator_name(by)" in source
+    assert (
+        "click_element(driver, wait, By.CSS_SELECTOR, 'button.primary', 'click sign in button', "
+        "[{'by': 'xpath', 'target': \"//button[normalize-space()='Sign in']\"}, {'by': 'css', 'target': \"[data-testid='signin']\"}])"
+        in source
+    )
+    compile(source, str(generated_path), "exec")

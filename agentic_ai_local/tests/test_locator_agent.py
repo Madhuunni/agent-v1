@@ -61,3 +61,43 @@ def test_locator_fallback_uses_control_inventory_for_prompt_mapping():
     assert result.locators[0].selected_by == "css"
     assert result.locators[0].selected_locator == "button[data-testid='signin']"
     assert "control inventory" in result.locators[0].reason
+
+
+def test_locator_fallback_preserves_ordered_candidate_selectors():
+    result = locator_agent._fallback(
+        {
+            "steps": [
+                {
+                    "step_number": 1,
+                    "action": "type",
+                    "target_description": "username field",
+                }
+            ]
+        },
+        {
+            "controls": [
+                {
+                    "tag": "input",
+                    "role": "textbox",
+                    "name": "username",
+                    "css_selector": "input[name='username']",
+                    "xpath": "//input[@name='username']",
+                    "candidate_selectors": [
+                        {"by": "css", "target": "input[placeholder='Username']"},
+                        {"by": "xpath", "target": "//input[@placeholder='Username']"},
+                    ],
+                    "keywords": ["username"],
+                }
+            ]
+        },
+    )
+
+    locator = result.locators[0]
+    assert locator.selected_by == "name"
+    assert locator.selected_locator == "username"
+    assert [item.model_dump() for item in locator.fallback_locators] == [
+        {"by": "css", "target": "input[name='username']"},
+        {"by": "xpath", "target": "//input[@name='username']"},
+        {"by": "css", "target": "input[placeholder='Username']"},
+        {"by": "xpath", "target": "//input[@placeholder='Username']"},
+    ]

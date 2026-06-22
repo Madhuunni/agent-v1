@@ -12,7 +12,7 @@ def _fallback(req: dict, selected: dict) -> TestPlan:
     for s in req.get('steps', []):
         loc = locs.get(s['step_number'])
         build = builders.get(s['action'])
-        item = build(s) if build else (TestStep(action=s['action'], by=loc['selected_by'], target=loc['selected_locator'], value=s.get('value'), value_from_env=s.get('value_from_env'), description=s['target_description']).model_dump() if loc else None)
+        item = build(s) if build else (TestStep(action=s['action'], by=loc['selected_by'], target=loc['selected_locator'], value=s.get('value'), value_from_env=s.get('value_from_env'), description=s['target_description'], locator_candidates=loc.get('fallback_locators', [])).model_dump() if loc else None)
         if item: steps.append(item)
     return TestPlan(name=req.get('name','Generated Selenium Test'), base_url=req.get('base_url'), steps=steps, assertions=[], warnings=[])
 
