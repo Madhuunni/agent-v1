@@ -29,3 +29,35 @@ def test_locator_fallback_matches_email_field_by_formcontrolname():
     assert result.missing_targets == []
     assert result.locators[0].selected_by == "id"
     assert result.locators[0].selected_locator == "mat-input-0"
+
+
+def test_locator_fallback_uses_control_inventory_for_prompt_mapping():
+    result = locator_agent._fallback(
+        {
+            "steps": [
+                {
+                    "step_number": 3,
+                    "action": "click",
+                    "target_description": "sign in button",
+                }
+            ]
+        },
+        {
+            "controls": [
+                {
+                    "tag": "button",
+                    "role": "button",
+                    "accessible_name": "Sign in",
+                    "text": "Sign in",
+                    "css_selector": "button[data-testid='signin']",
+                    "xpath": "//button[normalize-space()='Sign in']",
+                    "keywords": ["sign", "in"],
+                }
+            ]
+        },
+    )
+
+    assert result.missing_targets == []
+    assert result.locators[0].selected_by == "css"
+    assert result.locators[0].selected_locator == "button[data-testid='signin']"
+    assert "control inventory" in result.locators[0].reason
