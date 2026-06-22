@@ -181,3 +181,40 @@ def test_generated_selenium_script_falls_back_to_semantic_input_locator(monkeypa
     assert "input[formcontrolname*='email' i]" in source
     assert 'type_into_element(driver, wait, By.XPATH, "//input[@type=\'email\']", \'the email input field\', env_value(None) if None else \'t@t.com\')' in source
     compile(source, str(generated_path), "exec")
+
+
+def test_generated_selenium_script_uses_semantic_click_fallback(monkeypatch, tmp_path):
+    generated_dir = tmp_path / "generated_tests"
+    generated_dir.mkdir()
+    monkeypatch.setattr(code_generator_agent, "GENERATED_TESTS_DIR", generated_dir)
+    monkeypatch.setattr(
+        code_generator_agent,
+        "relative_to_root",
+        lambda path: str(Path(path).relative_to(tmp_path)),
+    )
+
+    result = code_generator_agent.run(
+        {
+            "test_plan": {
+                "name": "semantic click fallback",
+                "base_url": "http://localhost:4200",
+                "steps": [
+                    {
+                        "action": "click",
+                        "by": "xpath",
+                        "target": "//button[normalize-space()='Sign in']",
+                        "description": "click sign in button",
+                    }
+                ],
+            }
+        }
+    )
+
+    generated_path = tmp_path / result["generated_code"]["file_path"]
+    source = generated_path.read_text()
+
+    assert "def clickable_element" in source
+    assert "def click_element" in source
+    assert "button, a, input[type='button'], input[type='submit'], [role='button']" in source
+    assert "click_element(driver, wait, By.XPATH, \"//button[normalize-space()='Sign in']\", 'click sign in button')" in source
+    compile(source, str(generated_path), "exec")

@@ -46,3 +46,20 @@ def test_dom_summary_captures_angular_formcontrolname(tmp_path, monkeypatch):
     assert email_input["form_control_name"] == "email"
     assert email_input["css_selector"] == "#mat-input-0"
     assert email_input["xpath"] == "//*[@id='mat-input-0']"
+
+
+def test_dom_summary_builds_control_inventory_with_labels(tmp_path, monkeypatch):
+    from app.tools import dom_extractor
+
+    monkeypatch.setattr(dom_extractor, "RUN_LOGS_DIR", tmp_path)
+    monkeypatch.setattr(dom_extractor, "relative_to_root", lambda path: str(path))
+
+    summary = dom_extractor.summarize_html(
+        "http://localhost:4200/",
+        '<label for="email">Email address</label><input id="email" name="email"><button data-testid="signin">Sign in</button>',
+    )
+
+    assert [control["accessible_name"] for control in summary["controls"]] == ["Email address", "Sign in"]
+    assert summary["controls"][0]["label"] == "Email address"
+    assert summary["controls"][1]["role"] == "button"
+    assert "sign" in summary["controls"][1]["keywords"]
