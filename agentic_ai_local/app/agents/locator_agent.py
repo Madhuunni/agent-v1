@@ -8,10 +8,15 @@ _ACTIONLESS = {'navigate','assert_text','assert_url','wait','screenshot'}
 
 def _candidate_locators(el: dict) -> list[dict[str, str]]:
     candidates: list[dict[str, str]] = []
+    form_control_name = el.get("form_control_name")
+    form_control_css = f"{el.get('tag') or '*'}[formcontrolname='{form_control_name}']" if form_control_name else None
+    form_control_xpath = f"//{el.get('tag') or '*'}[@formcontrolname='{form_control_name}']" if form_control_name else None
     pairs = [
         ("id", el.get("id")),
         ("name", el.get("name")),
+        ("css", form_control_css),
         ("css", el.get("css_selector")),
+        ("xpath", form_control_xpath),
         ("xpath", el.get("xpath")),
     ]
     for by, target in pairs:

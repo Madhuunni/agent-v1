@@ -101,3 +101,35 @@ def test_locator_fallback_preserves_ordered_candidate_selectors():
         {"by": "css", "target": "input[placeholder='Username']"},
         {"by": "xpath", "target": "//input[@placeholder='Username']"},
     ]
+
+
+def test_locator_fallback_includes_formcontrolname_candidates():
+    result = locator_agent._fallback(
+        {
+            "steps": [
+                {
+                    "step_number": 2,
+                    "action": "type",
+                    "target_description": "input formcontrolname=email",
+                }
+            ]
+        },
+        {
+            "controls": [
+                {
+                    "tag": "input",
+                    "id": "mat-input-0",
+                    "form_control_name": "email",
+                    "css_selector": "#mat-input-0",
+                    "xpath": "//*[@id='mat-input-0']",
+                    "keywords": ["email"],
+                }
+            ]
+        },
+    )
+
+    locator = result.locators[0]
+    assert locator.selected_locator == "mat-input-0"
+    assert {"by": "css", "target": "input[formcontrolname='email']"} in [
+        item.model_dump() for item in locator.fallback_locators
+    ]

@@ -30,3 +30,17 @@ def test_test_plan_rejects_locator_as_navigation_url():
 def test_test_plan_requires_absolute_http_base_url():
     with pytest.raises(ValidationError):
         SeleniumTestPlan(name="bad base", base_url="localhost:4200")
+
+
+def test_locator_schema_rejects_blank_targets():
+    from app.schemas.locator import LocatorChoice
+
+    with pytest.raises(ValidationError):
+        LocatorChoice(
+            step_number=1,
+            target_description="email field",
+            selected_by="css",
+            selected_locator="",
+            confidence=0.5,
+            reason="invalid empty locator",
+        )
