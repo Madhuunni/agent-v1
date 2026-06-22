@@ -46,13 +46,24 @@ def close_agent_file_logging() -> None:
     _AGENT_FILE_HANDLERS.clear()
 
 
-def _agent_file_prefix(agent_name: str) -> str:
-    return agent_name.removesuffix("_agent")
+_SCHEMA_LAYER_AGENT_NAMES = {
+    "Observation": "observer_agent",
+    "Requirement": "requirement_agent",
+    "LocatorResult": "locator_agent",
+    "TestPlan": "test_plan_agent",
+}
 
 
 def _base_agent_name(layer: str) -> str:
     first_segment = layer.split(".", 1)[0]
-    return first_segment if first_segment.endswith("_agent") else layer
+    return _SCHEMA_LAYER_AGENT_NAMES.get(
+        first_segment,
+        first_segment if first_segment.endswith("_agent") else layer,
+    )
+
+
+def _agent_file_prefix(agent_name: str) -> str:
+    return _base_agent_name(agent_name).removesuffix("_agent")
 
 
 def get_agent_log_path(agent_name: str) -> Path:

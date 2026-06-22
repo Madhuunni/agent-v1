@@ -175,3 +175,34 @@ def test_agent_activity_logs_to_separate_timestamped_files(tmp_path):
     assert "[planner_agent] agent call started" in planner_log.read_text()
     assert "LLM request JSON" in planner_log.read_text()
     assert "planner_agent" not in observer_log.read_text()
+
+
+def test_schema_layer_logs_reuse_agent_timestamped_files(tmp_path):
+    from app.utils import agent_logging
+
+    agent_logging.configure_agent_file_logging(
+        log_dir=tmp_path,
+        run_timestamp="20260622_111220",
+        verbose=True,
+    )
+
+    try:
+        agent_logging.log_agent_start("observer_agent", {"user_prompt": "observe"})
+        agent_logging.log_llm_request("Observation", {"input": "observe"})
+        agent_logging.log_agent_start("requirement_agent", {"user_prompt": "require"})
+        agent_logging.log_llm_request("Requirement", {"input": "require"})
+        agent_logging.log_agent_start("locator_agent", {"user_prompt": "locate"})
+        agent_logging.log_llm_request("LocatorResult", {"input": "locate"})
+        agent_logging.log_agent_start("test_plan_agent", {"user_prompt": "plan"})
+        agent_logging.log_llm_request("TestPlan", {"input": "plan"})
+    finally:
+        agent_logging.close_agent_file_logging()
+
+    assert (tmp_path / "observer_20260622_111220.log").exists()
+    assert (tmp_path / "requirement_20260622_111220.log").exists()
+    assert (tmp_path / "locator_20260622_111220.log").exists()
+    assert (tmp_path / "test_plan_20260622_111220.log").exists()
+    assert not (tmp_path / "Observation_20260622_111220.log").exists()
+    assert not (tmp_path / "Requirement_20260622_111220.log").exists()
+    assert not (tmp_path / "LocatorResult_20260622_111220.log").exists()
+    assert not (tmp_path / "TestPlan_20260622_111220.log").exists()
