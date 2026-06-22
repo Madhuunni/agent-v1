@@ -134,3 +134,15 @@ def test_observer_treats_browser_action_prompt_as_executable_test():
     assert observation["requires_dom_inspection"] is True
     assert observation["requires_code_generation"] is True
     assert observation["requires_execution"] is True
+
+
+def test_requirement_fallback_uses_email_field_for_login_prompt():
+    from app.agents import requirement_agent
+
+    requirement = requirement_agent._fallback_requirement(
+        "Navigate to http://localhost:4200/. Enter email t@t.com and password test123.",
+        "http://localhost:4200/",
+    )
+
+    assert requirement.steps[1].target_description == "email field"
+    assert requirement.steps[1].value_from_env == "APP_USERNAME"

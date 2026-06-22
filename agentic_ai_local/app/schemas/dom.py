@@ -6,6 +6,7 @@ class DomElement(BaseModel):
     name: str | None = None
     id: str | None = None
     placeholder: str | None = None
+    form_control_name: str | None = None
     aria_label: str | None = None
     text: str | None = None
     css_selector: str

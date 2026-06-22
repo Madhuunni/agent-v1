@@ -5,7 +5,7 @@ from app.utils.agent_logging import log_llm_request, log_llm_response
 from app.schemas.requirement import Requirement, RequirementStep
 
 def _fallback_requirement(prompt: str, url: str | None) -> Requirement:
-    login_steps = [RequirementStep(step_number=2, action="type", target_description="username field", value_from_env="APP_USERNAME"), RequirementStep(step_number=3, action="type", target_description="password field", value_from_env="APP_PASSWORD"), RequirementStep(step_number=4, action="click", target_description="login submit button"), RequirementStep(step_number=5, action="assert_text", target_description="dashboard confirmation text", expected_result="Dashboard")]
+    login_steps = [RequirementStep(step_number=2, action="type", target_description="email field", value_from_env="APP_USERNAME"), RequirementStep(step_number=3, action="type", target_description="password field", value_from_env="APP_PASSWORD"), RequirementStep(step_number=4, action="click", target_description="login submit button"), RequirementStep(step_number=5, action="assert_text", target_description="dashboard confirmation text", expected_result="Dashboard")]
     steps = [RequirementStep(step_number=1, action="navigate", target_description="application URL", value=url), *login_steps] if url else []
     return Requirement(name="Local Selenium Automation", description=prompt, base_url=url, preconditions=["Ollama and target app are local"] if url else [], steps=steps, success_criteria=["All planned assertions pass"], missing_information=[] if url else ["Base URL is required before DOM inspection can run."])
 

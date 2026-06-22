@@ -13,7 +13,7 @@ def _fallback(req: dict, dom: dict) -> LocatorResult:
     locators, missing = [], []
     for step in [s for s in req.get('steps', []) if s.get('action') not in _ACTIONLESS]:
         keys = step.get('target_description', '').lower().split()
-        element = next((el for el in pool if any(k in ' '.join(str(el.get(f) or '') for f in ['name','id','placeholder','aria_label','text','type']).lower() for k in keys)), None)
+        element = next((el for el in pool if any(k in ' '.join(str(el.get(f) or '') for f in ['name','id','placeholder','form_control_name','aria_label','text','type']).lower() for k in keys)), None)
         if element is None:
             missing.append(step.get('target_description', 'unknown target')); continue
         by, locator = _best(element)
