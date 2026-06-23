@@ -206,3 +206,25 @@ def test_schema_layer_logs_reuse_agent_timestamped_files(tmp_path):
     assert not (tmp_path / "Requirement_20260622_111220.log").exists()
     assert not (tmp_path / "LocatorResult_20260622_111220.log").exists()
     assert not (tmp_path / "TestPlan_20260622_111220.log").exists()
+
+def test_report_agent_suppresses_missing_information_after_successful_execution():
+    from app.agents import report_agent
+
+    result = report_agent.run(
+        {
+            "user_prompt": "Navigate to http://localhost:4200/ and submit login form",
+            "observation": {"task_type": "selenium_test_generation"},
+            "completed_agents": ["requirement_agent", "executor_agent"],
+            "execution_plan": {"agent_sequence": ["requirement_agent", "executor_agent"]},
+            "requirement": {
+                "missing_information": [
+                    "The exact selectors for the email input field, password input field, and submit button are not provided."
+                ]
+            },
+            "execution_result": {"success": True, "log_file": "run_logs/execution.log"},
+        }
+    )
+
+    assert "## Execution Status" in result["final_report"]
+    assert "- Success: True" in result["final_report"]
+    assert "## Missing Information" not in result["final_report"]
