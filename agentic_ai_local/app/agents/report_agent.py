@@ -33,15 +33,7 @@ def run(state: dict) -> dict:
     if missing_information: lines += ["## Missing Information", *[f"- {m}" for m in missing_information]]
     if state.get('errors'): lines += ["## Errors", '```json', dump_json(state['errors']), '```']
     recommendation = "Review the generated artifacts. Chrome DOM inspection and execution artifacts above show what ran locally."
-    needs_browser_target = any(
-        obs.get(flag)
-        for flag in ("requires_dom_inspection", "requires_code_generation", "requires_execution")
-    )
-    has_browser_artifacts = bool(state.get('dom_snapshot') or state.get('execution_result'))
-    detected_url = obs.get('detected_url')
-    if needs_browser_target and not detected_url and not has_browser_artifacts:
+    if not state.get('dom_snapshot') and not state.get('execution_result'):
         recommendation = "Provide a reachable http:// or https:// URL and rerun so Chrome can navigate to the target application."
-    elif state.get('errors'):
-        recommendation = "Review the errors above, update the request or local environment, and rerun when ready."
     lines += ["## Retry Attempts", str(state.get('retry_count',0)), "## Final Recommendation", recommendation]
     return {"final_report": '\n'.join(lines), "stop": True}

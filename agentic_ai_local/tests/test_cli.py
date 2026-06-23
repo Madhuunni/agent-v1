@@ -6,24 +6,6 @@ from app import cli as cli_module
 runner = CliRunner()
 
 
-def fake_observation(url: str, *, executable: bool = True) -> dict:
-    return {
-        "user_goal": "goal",
-        "task_type": "selenium_test_generation" if executable else "browser_inspection",
-        "detected_url": url,
-        "requires_dom_inspection": executable,
-        "requires_code_generation": executable,
-        "requires_execution": executable,
-        "requires_debugging": False,
-        "available_agents": [],
-        "available_tools": [],
-        "known_context": {},
-        "existing_generated_tests": [],
-        "existing_run_logs": [],
-        "risks": [],
-    }
-
-
 def test_run_command_accepts_headless_boolean_value(monkeypatch, tmp_path):
     captured = {}
 
@@ -63,13 +45,22 @@ def test_run_command_accepts_headless_boolean_value(monkeypatch, tmp_path):
     )
 
 
-def test_observer_uses_llm_observation(monkeypatch):
+def test_observer_strips_trailing_prompt_punctuation_from_url():
     from app.agents import observer_agent
-    from app.schemas.observation import Observation
 
-    monkeypatch.setattr(observer_agent, "invoke_json", lambda schema, system, payload: Observation.model_validate(fake_observation("http://localhost:4200")))
+    result = observer_agent.run(
+        {"user_prompt": 'Generate Selenium test for http://localhost:4200).'}
+    )
 
-    result = observer_agent.run({"user_prompt": "Generate Selenium test for http://localhost:4200)."})
+    assert result["observation"]["detected_url"] == "http://localhost:4200"
+
+
+def test_observer_normalizes_single_slash_localhost_url():
+    from app.agents import observer_agent
+
+    result = observer_agent.run(
+        {"user_prompt": "Generate and run Selenium login test for http:/localhost:4200"}
+    )
 
     assert result["observation"]["detected_url"] == "http://localhost:4200"
 
@@ -85,7 +76,6 @@ def test_requirement_agent_invokes_local_llm(monkeypatch):
             return type("Response", (), {"content": "local llm checklist"})()
 
     monkeypatch.setattr(requirement_agent, "get_chat_model", lambda: FakeModel())
-    monkeypatch.setattr(requirement_agent, "invoke_json", lambda schema, system, payload: schema.model_validate({"name":"n","description":"d","base_url":"http://localhost:4200","preconditions":[],"steps":[],"success_criteria":[],"missing_information":[]}))
 
     result = requirement_agent.run(
         {
@@ -99,13 +89,44 @@ def test_requirement_agent_invokes_local_llm(monkeypatch):
     assert result["agent_outputs"]["requirement_agent_llm_notes"] == "local llm checklist"
 
 
-def test_observer_treats_browser_action_prompt_as_executable_test(monkeypatch):
+def test_requirement_agent_continues_when_local_llm_unavailable(monkeypatch):
+    from app.agents import requirement_agent
+    from app.llm.local_llm import OllamaUnavailableError
+
+    def unavailable_model():
+        raise OllamaUnavailableError("ollama is offline")
+
+    monkeypatch.setattr(requirement_agent, "get_chat_model", unavailable_model)
+
+    result = requirement_agent.run(
+        {
+            "user_prompt": "Generate Selenium test plan",
+            "observation": {"detected_url": None},
+            "agent_outputs": {},
+        }
+    )
+
+    assert result["requirement"]["missing_information"] == [
+        "Base URL is required before DOM inspection can run."
+    ]
+    assert (
+        "continuing with deterministic requirements"
+        in result["agent_outputs"]["requirement_agent_llm_notes"]
+    )
+
+
+def test_observer_treats_browser_action_prompt_as_executable_test():
     from app.agents import observer_agent
-    from app.schemas.observation import Observation
 
-    monkeypatch.setattr(observer_agent, "invoke_json", lambda schema, system, payload: Observation.model_validate(fake_observation("http://localhost:4200/")))
-
-    result = observer_agent.run({"user_prompt": "Navigate to http://localhost:4200/. Enter email t@t.com and password test123. Click login."})
+    result = observer_agent.run(
+        {
+            "user_prompt": (
+                "Navigate to http://localhost:4200/. Enter email t@t.com and "
+                "password test123. Click login. Validate Dashboard, Profile, "
+                "and Logout are present."
+            )
+        }
+    )
 
     observation = result["observation"]
     assert observation["detected_url"] == "http://localhost:4200/"
@@ -113,6 +134,18 @@ def test_observer_treats_browser_action_prompt_as_executable_test(monkeypatch):
     assert observation["requires_dom_inspection"] is True
     assert observation["requires_code_generation"] is True
     assert observation["requires_execution"] is True
+
+
+def test_requirement_fallback_uses_email_field_for_login_prompt():
+    from app.agents import requirement_agent
+
+    requirement = requirement_agent._fallback_requirement(
+        "Navigate to http://localhost:4200/. Enter email t@t.com and password test123.",
+        "http://localhost:4200/",
+    )
+
+    assert requirement.steps[1].target_description == "email field"
+    assert requirement.steps[1].value_from_env == "APP_USERNAME"
 
 
 def test_agent_activity_logs_to_separate_timestamped_files(tmp_path):
@@ -195,50 +228,3 @@ def test_report_agent_suppresses_missing_information_after_successful_execution(
     assert "## Execution Status" in result["final_report"]
     assert "- Success: True" in result["final_report"]
     assert "## Missing Information" not in result["final_report"]
-
-
-def test_report_agent_recommends_url_only_when_browser_task_lacks_target():
-    from app.agents import report_agent
-
-    result = report_agent.run(
-        {
-            "user_prompt": "Generate and run a Selenium login test",
-            "observation": {
-                "task_type": "selenium_test_generation",
-                "requires_dom_inspection": True,
-                "requires_code_generation": True,
-                "requires_execution": True,
-                "detected_url": None,
-            },
-            "completed_agents": ["planner_agent"],
-            "execution_plan": {"agent_sequence": ["report_agent"]},
-        }
-    )
-
-    assert (
-        "Provide a reachable http:// or https:// URL and rerun so Chrome can navigate"
-        in result["final_report"]
-    )
-
-
-def test_report_agent_does_not_request_url_for_non_browser_errors():
-    from app.agents import report_agent
-
-    result = report_agent.run(
-        {
-            "user_prompt": "Summarize the generated artifacts",
-            "observation": {
-                "task_type": "reporting",
-                "requires_dom_inspection": False,
-                "requires_code_generation": False,
-                "requires_execution": False,
-                "detected_url": None,
-            },
-            "completed_agents": ["planner_agent"],
-            "execution_plan": {"agent_sequence": ["report_agent"]},
-            "errors": [{"agent": "planner_agent", "error": "agent_sequence must not be empty"}],
-        }
-    )
-
-    assert "Provide a reachable http:// or https:// URL" not in result["final_report"]
-    assert "Review the errors above" in result["final_report"]
