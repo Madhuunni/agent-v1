@@ -1,7 +1,7 @@
 Agent Flow and File Responsibilities
 ====================================
 
-This project is a local, LangGraph-based Selenium automation pipeline. A user supplies a natural-language prompt, each agent asks the configured local LLM to convert its inputs into a schema-valid JSON output, the graph optionally inspects a browser DOM, selects locators, generates Selenium code, validates and optionally executes that code, and finally produces a Markdown run report. The pipeline now depends on the configured local LLM for all structured agent decisions; unavailable or invalid LLM output raises an error instead of using deterministic agent fallbacks.
+This project is a local, LangGraph-based Selenium automation pipeline. A user supplies a natural-language prompt, each agent asks the configured local LLM to convert its inputs into a schema-valid JSON output, the graph optionally inspects a browser DOM, selects locators, generates Selenium code, validates and optionally executes that code, and finally produces a Markdown run report. Schema-valid deterministic fallbacks keep the pipeline usable when the local LLM is unavailable.
 
 End-to-end prompt-to-report flow
 --------------------------------
@@ -18,7 +18,7 @@ End-to-end prompt-to-report flow
 
 3. Observation
    - `observer_agent` builds a JSON input containing `user_prompt`, available agents, persisted memory, existing generated test files, and existing run logs.
-   - The local LLM converts that input into an `Observation` JSON object with the detected URL, task type, required capabilities, tools, and risks. If the LLM is unavailable or returns invalid JSON, the agent raises the LLM/parsing error.
+   - The local LLM converts that input into an `Observation` JSON object with the detected URL, task type, required capabilities, tools, and risks. If the LLM is unavailable, a schema-valid fallback observation is used and the fallback reason is recorded in `agent_outputs`.
    - This becomes `observation` in the shared graph state.
 
 4. Planning
@@ -35,7 +35,7 @@ End-to-end prompt-to-report flow
    - `requirement_agent` sends the prompt and observation as JSON to the local LLM.
    - The LLM returns a `Requirement` JSON object containing the base URL, preconditions, ordered requirement steps, success criteria, and missing information.
    - Login secrets are represented structurally with `APP_USERNAME` and `APP_PASSWORD` environment-backed inputs.
-   - If local LLM JSON generation fails, the agent raises the LLM/parsing error instead of synthesizing requirements.
+   - If local LLM JSON generation fails, the agent returns a schema-valid fallback requirement and records the reason in `agent_outputs`.
 
 7. DOM inspection
    - `dom_agent` chooses the URL from `requirement.base_url` or `observation.detected_url` and calls the browser DOM reader.
@@ -48,7 +48,7 @@ End-to-end prompt-to-report flow
 
 9. Test plan generation
    - `test_plan_agent` sends requirements and selected locators as JSON to the local LLM.
-   - The LLM returns a `TestPlan` JSON object with executable `TestStep` entries; invalid LLM JSON fails the step instead of invoking deterministic generation.
+   - The LLM returns a `TestPlan` JSON object with executable `TestStep` entries; deterministic fallback generation only runs if LLM JSON validation fails.
    - The result is stored as `test_plan`.
 
 10. Selenium code generation
