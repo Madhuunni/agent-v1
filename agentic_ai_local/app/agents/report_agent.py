@@ -22,7 +22,15 @@ def run(state: dict) -> dict:
             lines.append(f"- Screenshot: {state['dom_snapshot']['screenshot']}")
     if state.get('generated_code'): lines += ["## Generated Files", f"- {state['generated_code']['file_path']}"]
     if state.get('execution_result'): lines += ["## Execution Status", f"- Success: {state['execution_result']['success']}", f"- Log: {state['execution_result']['log_file']}"]
-    if (state.get('requirement') or {}).get('missing_information'): lines += ["## Missing Information", *[f"- {m}" for m in state['requirement']['missing_information']]]
+    missing_information = list((state.get('requirement') or {}).get('missing_information') or [])
+    execution_result = state.get('execution_result') or {}
+    # A successful run means the generated script had enough information to complete.
+    # Local LLM requirement notes can still contain stale asks (for example, asking
+    # for selectors even after DOM inspection/execution succeeded), so suppress those
+    # contradictions from the final user-facing report.
+    if execution_result.get('success') is True:
+        missing_information = []
+    if missing_information: lines += ["## Missing Information", *[f"- {m}" for m in missing_information]]
     if state.get('errors'): lines += ["## Errors", '```json', dump_json(state['errors']), '```']
     recommendation = "Review the generated artifacts. Chrome DOM inspection and execution artifacts above show what ran locally."
     if not state.get('dom_snapshot') and not state.get('execution_result'):
