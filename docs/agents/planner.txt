@@ -1,0 +1,67 @@
+Planner agent
+=============
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/planner_agent.py
+- Plan schema: agentic_ai_local/app/schemas/agent_plan.py
+- Validation/router: agentic_ai_local/app/graph/router.py
+
+Purpose
+-------
+planner_agent converts the observation into a minimal ordered specialist-agent plan. It does not inspect DOMs, generate code, or execute tests. Its job is to decide which agents should run, in what order, within retry and iteration limits.
+
+Input
+-----
+Important state fields:
+- user_prompt: original prompt.
+- observation: output from observer_agent.
+- max_retries: retry budget.
+- max_iterations: maximum planned sequence length.
+- Existing artifacts such as selected_locators, requirement, test_plan, or generated_code can satisfy dependency validation.
+
+LLM prompt payload
+------------------
+planner_agent sends invoke_json:
+- user_prompt
+- observation
+- limits: max_retries and max_iterations
+
+Output
+------
+On success it returns:
+- execution_plan: AgentPlan JSON.
+- pending_agents: the ordered agent_sequence copied from the plan.
+- max_retries and max_iterations from the plan.
+- agent_outputs with optional planner_agent_llm_notes.
+
+AgentPlan fields
+----------------
+- task_type
+- goal
+- agent_sequence: ordered agent names.
+- parallel_agents: currently a schema field, but the runtime router uses pending_agents sequentially.
+- requires_browser
+- requires_code_generation
+- requires_execution
+- requires_debugging
+- max_retries
+- max_iterations
+- stop_condition
+- risk_level: low, medium, or high.
+- notes
+
+Validation rules
+----------------
+validate_plan rejects unknown agents, empty sequences, sequences longer than max_iterations, retry/iteration limits outside allowed ranges, missing prerequisites, and plans that do not end with report_agent.
+
+Fallback behavior
+-----------------
+_fallback_plan chooses deterministic sequences from prompt/observation. A generate-and-run browser action with a URL usually becomes:
+requirement_agent -> dom_agent -> locator_agent -> test_plan_agent -> code_generator_agent -> code_validator_agent -> executor_agent -> report_agent
+
+Tuning tips
+-----------
+- To allow a new specialist, add it to ALLOWED_AGENTS, register it in graph/nodes.py, and update validation if it has prerequisites.
+- To change default sequencing, edit _fallback_plan.
+- To tighten safety, add validation rules in validate_plan.

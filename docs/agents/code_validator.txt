@@ -1,0 +1,39 @@
+Code-validator agent
+====================
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/code_validator_agent.py
+- Validation tool: agentic_ai_local/app/tools/python_validator.py
+- Schema: agentic_ai_local/app/schemas/generated_code.py
+
+Purpose
+-------
+code_validator_agent validates generated Python before it is executed. It catches syntax/errors and records warnings.
+
+Input
+-----
+Important state fields:
+- generated_code.file_path: relative path to the generated script.
+
+Output
+------
+It returns:
+- code_validation_result: CodeValidationResult JSON.
+- errors: appended with a code_validator_agent error when validation fails.
+
+CodeValidationResult fields
+---------------------------
+- valid: boolean.
+- file_path
+- errors
+- warnings
+
+Failure behavior
+----------------
+If generated_code.file_path is missing, it raises ValueError. If validation returns errors, they are added to graph state so report_agent can display them.
+
+Tuning tips
+-----------
+- Modify app/tools/python_validator.py to add checks.
+- Keep this agent deterministic; it should reject unsafe/broken code before executor_agent runs it.

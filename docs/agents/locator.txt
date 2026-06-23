@@ -1,0 +1,54 @@
+Locator agent
+=============
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/locator_agent.py
+- Schema: agentic_ai_local/app/schemas/locator.py
+
+Purpose
+-------
+locator_agent maps human requirement steps to concrete Selenium locator choices from the DOM snapshot. It selects primary locators and records fallbacks.
+
+Input
+-----
+Important state fields:
+- requirement: ordered task steps.
+- dom_snapshot: controls, inputs, buttons, links, and element metadata.
+
+LLM prompt payload
+------------------
+- requirement
+- dom_snapshot
+
+Output
+------
+It returns:
+- selected_locators: LocatorResult JSON.
+- agent_outputs.locator_agent_llm_notes when fallback or parsing notes are needed.
+
+LocatorResult fields
+--------------------
+- locators: list of LocatorChoice.
+- missing_targets: requirement targets that could not be matched.
+- warnings
+
+LocatorChoice fields
+--------------------
+- step_number
+- target_description
+- selected_by: css, xpath, id, or name.
+- selected_locator
+- confidence: 0 to 1.
+- reason
+- fallback_locators: alternate locator candidates.
+
+Fallback behavior
+-----------------
+The fallback ignores actionless steps such as navigate/assert/wait/screenshot, scores DOM elements against target descriptions, prefers id, then name, then css, then xpath, and emits missing_targets when no useful match exists.
+
+Tuning tips
+-----------
+- Improve matching by editing _tokens, _element_text, and _score.
+- Change locator priority by editing _candidate_locators and _best.
+- Add locator strategies by updating schemas/locator.py, test_plan.py, and generated-code support.

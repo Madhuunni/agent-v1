@@ -1,0 +1,60 @@
+Test-plan agent
+===============
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/test_plan_agent.py
+- Schema: agentic_ai_local/app/schemas/test_plan.py
+
+Purpose
+-------
+test_plan_agent turns requirements plus selected locators into executable TestStep JSON. This is the bridge from human requirements to code generation.
+
+Input
+-----
+Important state fields:
+- requirement
+- selected_locators
+
+LLM prompt payload
+------------------
+- requirement
+- selected_locators
+
+Output
+------
+It returns:
+- test_plan: TestPlan JSON.
+- agent_outputs.test_plan_agent_llm_notes if applicable.
+
+TestPlan fields
+---------------
+- name
+- base_url
+- steps
+- assertions
+- warnings
+
+TestStep fields
+---------------
+- action: navigate, click, type, select, assert_text, assert_url, wait, or screenshot.
+- by: id, name, css, xpath, or body.
+- target: URL, locator, or assertion text depending on action.
+- value
+- value_from_env
+- description
+- locator_candidates: fallback locator list.
+
+Validation
+----------
+The schema requires navigate targets and base_url to be absolute http(s) URLs.
+
+Fallback behavior
+-----------------
+The fallback builds navigate/assert_text steps directly, then uses selected_locators for interactive actions. It does not invent locators.
+
+Tuning tips
+-----------
+- Edit the system prompt for stricter/looser plan generation.
+- Edit _fallback to alter deterministic conversion rules.
+- Keep test_plan.py validators aligned with code_generator_agent expectations.

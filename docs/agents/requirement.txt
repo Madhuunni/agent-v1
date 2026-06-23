@@ -1,0 +1,58 @@
+Requirement agent
+=================
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/requirement_agent.py
+- Schema: agentic_ai_local/app/schemas/requirement.py
+
+Purpose
+-------
+requirement_agent converts the prompt and observation into ordered Selenium automation requirements. It describes what the test should do in human/task terms before locators and executable code are introduced.
+
+Input
+-----
+Important state fields:
+- user_prompt
+- observation.detected_url
+- observation task flags and context
+
+LLM prompt payload
+------------------
+- user_prompt
+- observation
+
+Output
+------
+It returns:
+- requirement: Requirement JSON.
+- agent_outputs.requirement_agent_llm_notes: concise analysis notes or a local-LLM fallback note.
+
+Requirement fields
+------------------
+- name
+- description
+- base_url
+- preconditions
+- steps: ordered RequirementStep objects.
+- success_criteria
+- missing_information
+
+RequirementStep fields
+----------------------
+- step_number
+- action: navigate, click, type, select, assert_text, assert_url, wait, or screenshot.
+- target_description: human description such as email field or login submit button.
+- value: literal value if safe.
+- value_from_env: environment variable for secrets, normally APP_USERNAME or APP_PASSWORD.
+- expected_result: expected assertion value.
+
+Fallback behavior
+-----------------
+_fallback_requirement builds a standard login flow if a URL is present: navigate, type username from APP_USERNAME, type password from APP_PASSWORD, click login, assert Dashboard text. If no URL is present, it returns missing_information asking for a base URL.
+
+Tuning tips
+-----------
+- Edit the invoke_json system message to change how requirements are phrased.
+- Edit _fallback_requirement to change deterministic default steps.
+- Add new actions by updating schemas/requirement.py and matching support in test_plan_agent/code_generator_agent.

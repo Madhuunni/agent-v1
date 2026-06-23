@@ -1,0 +1,46 @@
+DOM agent
+=========
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/dom_agent.py
+- Tool: agentic_ai_local/app/tools/browser_tool.py
+- DOM schema: agentic_ai_local/app/schemas/dom.py
+
+Purpose
+-------
+dom_agent navigates a real browser to the target URL and extracts a DOM snapshot. Unlike most planning agents, it is deterministic/tool-driven and does not call the LLM.
+
+Input
+-----
+It looks for a URL in this order:
+- requirement.base_url
+- observation.detected_url
+
+Output
+------
+It returns:
+- dom_snapshot: dictionary from read_dom(url).
+
+DomSnapshot fields
+------------------
+- url
+- title
+- forms
+- inputs
+- buttons
+- links
+- controls: consolidated interactive controls.
+- page_text_sample
+- errors
+
+Element fields include tag, type, name, id, placeholder, form_control_name, aria_label, label, accessible_name, role, text, href, keywords, css_selector, xpath, and visible.
+
+Failure behavior
+----------------
+If no URL exists, dom_agent raises ValueError. The graph wrapper catches agent exceptions, records errors, and routes to report_agent unless retry rules apply.
+
+Tuning tips
+-----------
+- Modify browser extraction details in app/tools/browser_tool.py and app/tools/dom_extractor.py.
+- Modify DOM output shape in schemas/dom.py, then update locator_agent consumers.

@@ -1,0 +1,75 @@
+Fine-tuning and modification guide
+==================================
+
+What “fine tuning” means in this repo
+-------------------------------------
+This project uses local LLM calls through invoke_json plus deterministic fallbacks. There is no model-training pipeline in the repository. In practice, tuning behavior usually means editing one or more of these layers:
+
+1. System prompts passed to invoke_json inside each agent.
+2. Pydantic schemas in app/schemas/ that define valid structured output.
+3. Deterministic fallback functions such as _fallback_observation, _fallback_plan, _fallback_requirement, _fallback, and _fallback_debug.
+4. Tool code in app/tools/ for browser extraction, validation, or execution.
+5. Router/validation rules in app/graph/router.py.
+6. Generated Selenium template in app/agents/code_generator_agent.py.
+
+General safe workflow
+---------------------
+1. Pick the agent whose behavior you want to change.
+2. Read its documentation file in docs/agents/ and its source file in app/agents/.
+3. If changing LLM output shape, update the matching schema in app/schemas/ first.
+4. Update the agent prompt and fallback so both produce the same schema-valid shape.
+5. Update downstream consumers if field names or action types change.
+6. Add or update tests in agentic_ai_local/tests/.
+7. Run the relevant pytest tests and a CLI smoke test.
+
+Where to edit for common changes
+--------------------------------
+- Change how user prompts are classified: app/agents/observer_agent.py.
+- Change which agents run and in what order: app/agents/planner_agent.py and app/graph/router.py.
+- Change allowed agent names: app/schemas/agent_plan.py and app/graph/nodes.py.
+- Change requirement step vocabulary: app/schemas/requirement.py, app/agents/requirement_agent.py, app/agents/test_plan_agent.py, and app/agents/code_generator_agent.py.
+- Improve locator selection: app/agents/locator_agent.py and app/tools/dom_extractor.py.
+- Change generated Selenium code: app/agents/code_generator_agent.py.
+- Add validation/safety checks: app/tools/python_validator.py and app/tools/safety_tool.py.
+- Change execution behavior/logging: app/tools/selenium_runner.py.
+- Change final user report: app/agents/report_agent.py.
+
+Adding a new agent
+------------------
+1. Create a schema in app/schemas/ if the agent produces structured output.
+2. Create app/agents/my_agent.py with run(state: dict) -> dict.
+3. Add the agent name to ALLOWED_AGENTS in app/schemas/agent_plan.py.
+4. Import/register the run function in AGENT_RUNNERS in app/graph/nodes.py.
+5. Add dependency validation in validate_plan if needed.
+6. Update planner fallback sequences if the new agent should run by default.
+7. Add documentation in docs/agents/my_agent.txt.
+8. Add tests.
+
+Changing an LLM prompt without breaking fallbacks
+------------------------------------------------
+Most LLM-backed agents use invoke_json(schema, system_prompt, payload, fallback). When editing prompts:
+- Keep “Return only valid JSON” behavior in invoke_json unchanged unless you also update all callers.
+- Make the desired behavior explicit in the system prompt.
+- Do not rely on the LLM to produce fields that the fallback cannot produce.
+- Run tests with and without Ollama available if possible.
+
+Changing schemas
+----------------
+Schemas are contracts. If you add, remove, rename, or constrain fields:
+- Update every fallback that instantiates the schema.
+- Update every downstream agent that reads the field.
+- Update tests that validate schemas.
+- Be careful with stricter validators because local LLM output will fall back more often.
+
+Recommended checks after modifications
+--------------------------------------
+From agentic_ai_local/:
+- python -m pytest tests/test_schema_validation.py
+- python -m pytest tests/test_router.py
+- python -m pytest tests/test_plan_validator.py
+- python -m pytest tests/test_locator_agent.py tests/test_test_plan_agent.py tests/test_code_generator_agent.py
+- python -m app.cli run "Generate Selenium test plan for login at http://localhost:4200" --max-retries 1 --headless true --verbose
+
+Notes on real model fine-tuning
+-------------------------------
+If you want to train or fine-tune the underlying local model itself, that is outside this repo's current code. You would need to collect prompt/input/schema/output examples, fine-tune a supported local model with an external training tool, serve it through Ollama or the configured local model interface, and then update LOCAL_LLM_MODEL in the environment. The repository-side changes would still be prompt/schema/fallback validation as described above.

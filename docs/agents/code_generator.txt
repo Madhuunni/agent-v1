@@ -1,0 +1,54 @@
+Code-generator agent
+====================
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/code_generator_agent.py
+- Generated-code schema: agentic_ai_local/app/schemas/generated_code.py
+- Output directory config: agentic_ai_local/app/config.py
+
+Purpose
+-------
+code_generator_agent renders the structured test plan into an executable Python Selenium script under generated_tests/. It is mostly template/deterministic code generation rather than an LLM prompt.
+
+Input
+-----
+Important state fields:
+- test_plan: preferred input.
+- If test_plan is missing, a minimal existing_or_debug_test plan with no steps is used.
+
+Output
+------
+It returns:
+- generated_code: GeneratedCode JSON.
+
+GeneratedCode fields
+--------------------
+- file_path: relative path to the generated script.
+- language: python.
+- framework: selenium.
+- summary
+- requires_env: required environment variables such as APP_USERNAME and APP_PASSWORD.
+- warnings
+
+Generated script behavior
+-------------------------
+The rendered script:
+- imports Selenium and webdriver-manager.
+- creates Chrome options for headless/local execution.
+- resolves a compatible ChromeDriver.
+- defines locator helpers and semantic input fallback helpers.
+- executes each TestStep action.
+- reads secret values from environment variables.
+- writes screenshots/logs on failures.
+- cleans up the browser session.
+
+Safety/robustness details
+-------------------------
+_steps_with_navigation ensures generated Selenium scripts start with a valid absolute app URL and avoids invalid driver.get targets such as XPath strings.
+
+Tuning tips
+-----------
+- Modify generated Selenium template lines in code_generator_agent.py.
+- Modify output naming by changing slugify usage and GENERATED_TESTS_DIR handling.
+- Add support for new TestStep actions in both schemas/test_plan.py and code_generator_agent.py.
