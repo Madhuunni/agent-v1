@@ -1,0 +1,44 @@
+Executor agent
+==============
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/executor_agent.py
+- Runner tool: agentic_ai_local/app/tools/selenium_runner.py
+- Schema: agentic_ai_local/app/schemas/execution.py
+
+Purpose
+-------
+executor_agent runs a generated Selenium script and records the process result, logs, screenshots, duration, and error type.
+
+Input
+-----
+Important state fields:
+- generated_code.file_path: generated script to run.
+- If missing, it defaults to generated_tests/login_and_verify_dashboard.py.
+
+Output
+------
+It returns:
+- execution_result: ExecutionResult JSON.
+- errors: appended with executor_agent stderr when execution fails.
+
+ExecutionResult fields
+----------------------
+- success
+- exit_code
+- stdout
+- stderr
+- log_file
+- screenshots
+- duration_seconds
+- error_type
+
+Retry interaction
+-----------------
+The graph wrapper's after_agent handles exceptions from agents. For executor_agent exceptions, if retry_count is below max_retries, it schedules debug_agent -> code_generator_agent -> code_validator_agent -> executor_agent -> report_agent. If executor_agent returns success=false rather than raising, the result and error are recorded for the report.
+
+Tuning tips
+-----------
+- Modify process execution, environment, log capture, or allowed paths in app/tools/selenium_runner.py.
+- Modify retry scheduling in app/graph/router.py if failed executions should automatically branch differently.

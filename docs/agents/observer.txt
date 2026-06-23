@@ -1,0 +1,62 @@
+Observer agent
+==============
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/observer_agent.py
+- Output schema: agentic_ai_local/app/schemas/observation.py
+- State definition: agentic_ai_local/app/graph/state.py
+
+Purpose
+-------
+observer_agent is the first stage of the workflow. It turns the raw user prompt plus local project context into structured facts that downstream agents can trust. It detects the user's goal, the task type, URL, whether browser DOM inspection is needed, whether code generation/execution/debugging is needed, what generated tests/logs already exist, and what agents/tools are available.
+
+Input
+-----
+The agent receives the shared graph state. Important fields are:
+- user_prompt: raw user request.
+- Generated tests directory contents: read from GENERATED_TESTS_DIR.
+- Run logs directory contents: read from RUN_LOGS_DIR.
+- Local memory: loaded with load_memory().
+- Available agents: ALLOWED_AGENTS from app/schemas/agent_plan.py.
+
+LLM prompt payload
+------------------
+observer_agent sends invoke_json an input payload with:
+- user_prompt
+- known_context
+- existing_generated_tests
+- existing_run_logs
+- available_agents
+
+Output
+------
+It returns:
+- observation: a JSON object matching Observation.
+- agent_outputs: may include observer_agent_llm_notes if the local LLM failed or produced invalid JSON.
+
+Observation fields
+------------------
+- user_goal: restated user goal.
+- task_type: for example selenium_test_generation or browser_inspection.
+- detected_url: first http(s) URL found in the prompt, or null.
+- requires_dom_inspection: true when the task needs page/DOM facts.
+- requires_code_generation: true when Selenium test code should be generated.
+- requires_execution: true when the prompt asks to run/execute/navigate/click/verify.
+- requires_debugging: true when the prompt asks to fix/debug a failure.
+- available_agents: sorted agent list.
+- available_tools: browser_dom_reader, selenium_runner, file_writer, python_syntax_checker.
+- known_context: persisted memory.
+- existing_generated_tests: existing generated Python test files.
+- existing_run_logs: existing run log artifacts.
+- risks: risk notes.
+
+Fallback behavior
+-----------------
+If the local LLM is unavailable or returns bad JSON, _fallback_observation uses simple keyword detection. It extracts URLs with a regex, classifies automation/browser-inspection tasks, and sets boolean capability flags from prompt terms.
+
+Tuning tips
+-----------
+- To change URL detection, edit _detect_url in observer_agent.py.
+- To change task classification, edit automation_terms and execution_terms in _fallback_observation.
+- To add/remove observation fields, update Observation in schemas/observation.py and then update the fallback and any consumers.

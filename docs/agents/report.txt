@@ -1,0 +1,57 @@
+Report agent
+============
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/report_agent.py
+- JSON utility: agentic_ai_local/app/utils/json_utils.py
+
+Purpose
+-------
+report_agent assembles a final Markdown report from all state artifacts. It is normally the final agent in every valid plan.
+
+Input
+-----
+It reads many optional state fields:
+- user_prompt
+- observation
+- execution_plan
+- completed_agents
+- agent_outputs.requirement_agent_llm_notes
+- dom_snapshot
+- generated_code
+- execution_result
+- requirement.missing_information
+- errors
+- retry_count
+
+Output
+------
+It returns:
+- final_report: Markdown string.
+- stop: true.
+
+Report sections
+---------------
+The report can include:
+- User Request
+- Detected Task Type
+- Agents Executed
+- Plan JSON
+- Local LLM Notes
+- Browser DOM Inspection
+- Generated Files
+- Execution Status
+- Missing Information
+- Errors
+- Retry Attempts
+- Final Recommendation
+
+Special behavior
+----------------
+If execution_result.success is true, report_agent suppresses stale missing_information from requirement_agent so the final report does not contradict a successful run.
+
+Tuning tips
+-----------
+- Edit report_agent.py to add/remove Markdown sections.
+- Keep missing information and error handling user-facing and concise.

@@ -1,0 +1,48 @@
+Debug agent
+===========
+
+Source files
+------------
+- Agent: agentic_ai_local/app/agents/debug_agent.py
+- Schema: agentic_ai_local/app/schemas/report.py
+
+Purpose
+-------
+debug_agent classifies a failed Selenium run and recommends whether a retry should happen, whether DOM should be refreshed, and what likely cause/fix strategy applies.
+
+Input
+-----
+Important state fields:
+- execution_result: stdout, stderr, success flag, screenshots, error type, log file.
+- errors: accumulated graph errors.
+
+LLM prompt payload
+------------------
+- execution_result
+- errors
+
+Output
+------
+It returns:
+- debug_result: DebugResult JSON.
+- agent_outputs.debug_agent_llm_notes if applicable.
+
+DebugResult fields
+------------------
+- failure_summary
+- likely_cause
+- fix_strategy
+- requires_dom_refresh
+- updated_steps
+- updated_locators
+- recommend_retry
+
+Fallback behavior
+-----------------
+_fallback_debug scans stdout/stderr for keywords. It maps timeout to timeout, no such element to selector_not_found, APP_USERNAME/APP_PASSWORD to auth_failure, driver to browser_error, and otherwise unknown.
+
+Tuning tips
+-----------
+- Add more failure classifiers in _fallback_debug.
+- Extend DebugResult if you want debug_agent to output concrete patch instructions consumed by code_generator_agent.
+- Update router retry behavior if debug_result should control next pending agents directly.
