@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 from typing import Any, TypeVar
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from app.llm.local_llm import get_chat_model
 from app.utils.agent_logging import log_llm_request, log_llm_response
 
@@ -35,12 +35,12 @@ def _console_log_llm_output(layer: str, raw_text: str) -> None:
     print(f"[{layer}] Local LLM raw output before invoke_json parsing:\n{raw_text}", flush=True)
 
 
-def invoke_json(schema: type[T], system: str, payload: dict[str, Any], fallback: T, layer: str | None = None) -> tuple[T, str | None]:
+def invoke_json(schema: type[T], system: str, payload: dict[str, Any], layer: str | None = None) -> T:
     """Ask the local LLM for one JSON object matching a Pydantic schema.
 
-    Agents use this to keep their run functions data-driven. When Ollama is not
-    available or produces invalid JSON, the provided schema-valid fallback keeps
-    CLI/tests deterministic while surfacing the reason as a note.
+    Agents use this to keep their run functions fully LLM-driven. If the local
+    LLM is unavailable or returns invalid JSON, the original exception is raised
+    instead of substituting deterministic data.
     """
     schema_json = schema.model_json_schema()
     request_json = {"system": system, "schema": schema_json, "input": payload}
@@ -51,14 +51,9 @@ def invoke_json(schema: type[T], system: str, payload: dict[str, Any], fallback:
     )
     log_layer = layer or _default_layer(schema.__name__)
     log_llm_request(log_layer, request_json)
-    try:
-        response = get_chat_model().invoke(prompt)
-        raw_text = _text(response)
-        _console_log_llm_output(log_layer, raw_text)
-        data = json.loads(extract_json(raw_text))
-        log_llm_response(log_layer, {"raw": raw_text, "json": data})
-        return schema.model_validate(data), None
-    except (Exception, ValidationError) as exc:
-        fallback_json = fallback.model_dump()
-        log_llm_response(log_layer, {"error": str(exc), "fallback_json": fallback_json})
-        return fallback, f"Local LLM JSON unavailable; used schema fallback. {exc}"
+    response = get_chat_model().invoke(prompt)
+    raw_text = _text(response)
+    _console_log_llm_output(log_layer, raw_text)
+    data = json.loads(extract_json(raw_text))
+    log_llm_response(log_layer, {"raw": raw_text, "json": data})
+    return schema.model_validate(data)
