@@ -195,3 +195,50 @@ def test_report_agent_suppresses_missing_information_after_successful_execution(
     assert "## Execution Status" in result["final_report"]
     assert "- Success: True" in result["final_report"]
     assert "## Missing Information" not in result["final_report"]
+
+
+def test_report_agent_recommends_url_only_when_browser_task_lacks_target():
+    from app.agents import report_agent
+
+    result = report_agent.run(
+        {
+            "user_prompt": "Generate and run a Selenium login test",
+            "observation": {
+                "task_type": "selenium_test_generation",
+                "requires_dom_inspection": True,
+                "requires_code_generation": True,
+                "requires_execution": True,
+                "detected_url": None,
+            },
+            "completed_agents": ["planner_agent"],
+            "execution_plan": {"agent_sequence": ["report_agent"]},
+        }
+    )
+
+    assert (
+        "Provide a reachable http:// or https:// URL and rerun so Chrome can navigate"
+        in result["final_report"]
+    )
+
+
+def test_report_agent_does_not_request_url_for_non_browser_errors():
+    from app.agents import report_agent
+
+    result = report_agent.run(
+        {
+            "user_prompt": "Summarize the generated artifacts",
+            "observation": {
+                "task_type": "reporting",
+                "requires_dom_inspection": False,
+                "requires_code_generation": False,
+                "requires_execution": False,
+                "detected_url": None,
+            },
+            "completed_agents": ["planner_agent"],
+            "execution_plan": {"agent_sequence": ["report_agent"]},
+            "errors": [{"agent": "planner_agent", "error": "agent_sequence must not be empty"}],
+        }
+    )
+
+    assert "Provide a reachable http:// or https:// URL" not in result["final_report"]
+    assert "Review the errors above" in result["final_report"]
