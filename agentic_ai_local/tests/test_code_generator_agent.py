@@ -178,8 +178,51 @@ def test_generated_selenium_script_falls_back_to_semantic_input_locator(monkeypa
 
     assert "TimeoutException" in source
     assert "def _semantic_input_candidates" in source
-    assert "input[formcontrolname*='email' i]" in source
+    assert "def meaningful_words" in source
+    assert "FIELD_MATCH_ATTRIBUTES" in source
+    assert 'selectors.extend(f"input[{attribute}*={css_string(word)} i]"' in source
+    assert "if 'email' in haystack" not in source
+    assert "if 'password' in haystack" not in source
     assert 'type_into_element(driver, wait, By.XPATH, "//input[@type=\'email\']", \'the email input field\', env_value(None) if None else \'t@t.com\')' in source
+    compile(source, str(generated_path), "exec")
+
+
+def test_generated_selenium_script_derives_semantic_input_terms_from_prompt(monkeypatch, tmp_path):
+    generated_dir = tmp_path / "generated_tests"
+    generated_dir.mkdir()
+    monkeypatch.setattr(code_generator_agent, "GENERATED_TESTS_DIR", generated_dir)
+    monkeypatch.setattr(
+        code_generator_agent,
+        "relative_to_root",
+        lambda path: str(Path(path).relative_to(tmp_path)),
+    )
+
+    result = code_generator_agent.run(
+        {
+            "test_plan": {
+                "name": "semantic account fallback",
+                "base_url": "http://localhost:4200",
+                "steps": [
+                    {
+                        "action": "type",
+                        "by": "css",
+                        "target": "input.account-number",
+                        "value": "12345",
+                        "description": "enter account number",
+                    }
+                ],
+            }
+        }
+    )
+
+    generated_path = tmp_path / result["generated_code"]["file_path"]
+    source = generated_path.read_text()
+
+    assert "semantic_input_selectors(description, target)" in source
+    assert "meaningful_words(description, target)" in source
+    assert "account-number" in source
+    assert "input[type='email']" not in source
+    assert "input[type='password']" not in source
     compile(source, str(generated_path), "exec")
 
 
